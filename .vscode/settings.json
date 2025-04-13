@@ -1,0 +1,24 @@
+{
+    "C_Cpp.intelliSenseEngine": "default",
+    "idf.espIdfPathWin": "C:\\Users\\sprin\\esp\\v5.4.1\\esp-idf",
+    "idf.pythonInstallPath": "C:\\Users\\sprin\\.espressif\\tools\\idf-python\\3.11.2\\python.exe",
+    "idf.openOcdConfigs": [
+        "board/esp32s3-builtin.cfg"
+    ],
+    "idf.portWin": "COM11",
+    "idf.toolsPathWin": "C:\\Users\\sprin\\.espressif",
+    "idf.customExtraVars": {
+        "IDF_TARGET": "esp32s3"
+    },
+    "idf.flashType": "UART",
+    "C_Cpp.errorSquiggles": "enabled",
+    "files.associations": {
+        "task.h": "c",
+        "adc_oneshot.h": "c",
+        "dhcp.h": "c",
+        "bsp_board.h": "c",
+        "ip_addr.h": "c",
+        "stdio.h": "c",
+        "esp_event.h": "c"
+    }
+}
