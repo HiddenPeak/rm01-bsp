@@ -1,4 +1,48 @@
 dependencies:
+  espressif/ch390:
+    component_hash: cdc5a7499a4175dc493a714d9c5ecb534d258d3df8ec1ca9a56f9c0201be2149
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.1'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 0.2.2
+  espressif/enc28j60:
+    component_hash: ac9af63b0e9bc7dd9a8b252d0c58db448f2b57b01291aecd353dc1c4b8fe0a62
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.4'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 1.0.0
+  espressif/ethernet_init:
+    component_hash: 40a26bc0e24b6d2d663b8682e6b2398f19473b4e1c19949a29fcac5ec4b348d6
+    dependencies:
+    - name: espressif/ch390
+      registry_url: https://components.espressif.com
+      require: private
+      version: '*'
+    - name: espressif/enc28j60
+      registry_url: https://components.espressif.com
+      require: private
+      version: '*'
+    - name: espressif/lan867x
+      registry_url: https://components.espressif.com
+      require: private
+      rules:
+      - if: target in [esp32, esp32p4]
+      version: '*'
+    - name: idf
+      require: private
+      version: '>=5.4'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 0.4.0
   espressif/led_strip:
     component_hash: b578eb926d9f6402fd45398b53c9bd5d1b7a15c1b2974d25aa3088e6c79b0b4c
     dependencies:
@@ -14,8 +58,9 @@ dependencies:
       type: idf
     version: 5.4.1
 direct_dependencies:
+- espressif/ethernet_init
 - espressif/led_strip
 - idf
-manifest_hash: a51dc977be7137e0c5d12a067d1d573535d49f17e9bfa487be8f8b97cf684d41
+manifest_hash: 89b53709e5cee767b2ec377079f61fd7dc8c3e5bce2e963a731f1a28e133494d
 target: esp32s3
 version: 2.0.0

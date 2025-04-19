@@ -3,10 +3,15 @@
 
 #include "driver/gpio.h"
 #include "driver/spi_master.h"
+#include "esp_eth.h"
+#include "esp_eth_mac.h"
+#include "esp_eth_phy.h"
+#include "esp_netif.h"
 #include "driver/sdmmc_host.h"
 #include "led_strip.h"
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
+#include "ethernet_init.h"
 
 // touchpad and status led(ws2812)
 #define BSP_TOUCHPAD_PIN 14
@@ -78,6 +83,7 @@ void bsp_lpn100_init(void);
 void bsp_w5500_init(spi_host_device_t host);
 void bsp_rtl8367_init(void);
 void bsp_voltage_init(void);
+
 
 // WS2812测试函数
 void bsp_ws2812_onboard_test(void);
