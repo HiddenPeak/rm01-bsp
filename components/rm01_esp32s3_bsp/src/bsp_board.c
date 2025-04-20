@@ -231,7 +231,7 @@ void bsp_w5500_init(spi_host_device_t host) {
     // 3. 设置静态IP地址
     esp_netif_ip_info_t ip_info;
     IP4_ADDR(&ip_info.ip, 10, 10, 99, 97);        // 设置W5500的IP为10.10.99.97
-    IP4_ADDR(&ip_info.gw, 10, 10, 99, 99);        // 网关为自己
+    IP4_ADDR(&ip_info.gw, 10, 10, 99, 99);        // 网关为LPN100的IP地址
     IP4_ADDR(&ip_info.netmask, 255, 255, 255, 0); // 子网掩码为255.255.255.0
 
     // 4. 创建并配置默认的以太网网络接口
@@ -242,7 +242,7 @@ void bsp_w5500_init(spi_host_device_t host) {
     // 修改名称以标识这是DHCP服务器接口
     esp_netif_config.if_desc = "w5500-dhcps";
     esp_netif_config.route_prio = 50;
-    // 将标志设置为DHCP服务器
+    // 将标志设置为DHCP服务器和自动启动（必选，否则无法提供服务）
     esp_netif_config.flags = ESP_NETIF_DHCP_SERVER | ESP_NETIF_FLAG_AUTOUP ;
     // 设置默认IP信息
     esp_netif_config.ip_info = &ip_info;
