@@ -26,6 +26,19 @@
 #define BSP_WS2812_ARRAY_PIN     9
 #define BSP_WS2812_ARRAY_COUNT   (32 * 32)
 
+#define WIDTH 32             // Matrix width
+#define HEIGHT 32            // Matrix height
+#define NUM_LEDS (WIDTH * HEIGHT) // Total LEDs: 1024
+
+// Flash animation parameters
+#define FLASH_WIDTH 2
+#define ANIMATION_SPEED 1
+
+// 白点参考值宏定义（与 CALIB_WHITE 保持一致）
+#define WHITE_R 42
+#define WHITE_G 28
+#define WHITE_B 19
+
 // Orin Control
 #define BSP_ORIN_RESET_PIN       1
 #define BSP_ORIN_POWER_PIN       3
@@ -96,5 +109,7 @@ void bsp_lpn100_power_toggle(void);
 // 电压读取函数
 float bsp_get_main_voltage(void);
 float bsp_get_aux_12v_voltage(void);
+
+
 
 #endif

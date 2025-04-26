@@ -5,6 +5,10 @@
 #include "esp_log.h"
 #include "sdkconfig.h"
 
+// 声明 matrix_init 和 update_matrix
+extern void matrix_init();
+extern void update_matrix();
+
 void app_main(void) {
     ESP_LOGI("MAIN", "应用程序启动");
     bsp_board_init();
@@ -25,11 +29,17 @@ void app_main(void) {
     // 重启交换机
     // bsp_rtl8367_init();
 
+    // 读取电压
+    float main_v = bsp_get_main_voltage();
+    float aux_v = bsp_get_aux_12v_voltage();
+    printf("Main Voltage: %.2fV, Aux 12V: %.2fV\n", main_v, aux_v);
+    // 初始化LED矩阵
+    matrix_init();
+    // 重启交换机
+    // bsp_rtl8367_init();
     while (1) {
-        // 读取电压
-        float main_v = bsp_get_main_voltage();
-        float aux_v = bsp_get_aux_12v_voltage();
-        printf("Main Voltage: %.2fV, Aux 12V: %.2fV\n", main_v, aux_v);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        // 更新矩阵
+        update_matrix();
+        vTaskDelay(30 / portTICK_PERIOD_MS); // 约33FPS
     }
 }
