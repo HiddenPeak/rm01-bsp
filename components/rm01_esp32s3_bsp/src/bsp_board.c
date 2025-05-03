@@ -183,6 +183,9 @@ void bsp_lpn100_init(void) {
     gpio_set_level(BSP_LPN100_RESET_PIN, 1);
     // 确保PWR_BTN引脚(GPIO46)为高电平，避免不小心触发BIOS清除
     // 该引脚连接到LPN100的PWR_BTN，拉低超过5秒会清空BIOS
+    // 拉低100ms 
+    gpio_set_level(BSP_LPN100_POWER_PIN, 0); // 按下电源按钮
+    vTaskDelay(100 / portTICK_PERIOD_MS); // 100ms
     gpio_set_level(BSP_LPN100_POWER_PIN, 1); // 默认高电平
     ESP_LOGI(TAG, "LPN100 PWR_BTN引脚初始化为高电平，避免清空BIOS");
 }
@@ -236,7 +239,7 @@ void bsp_w5500_init(spi_host_device_t host) {
     // 3. 设置静态IP地址
     esp_netif_ip_info_t ip_info;
     IP4_ADDR(&ip_info.ip, 10, 10, 99, 97);        // 设置W5500的IP为10.10.99.97
-    IP4_ADDR(&ip_info.gw, 10, 10, 99, 99);        // 网关为LPN100的IP地址
+    IP4_ADDR(&ip_info.gw, 10, 10, 99, 100);        // 网关为LP Mu的IP地址99 用户主机ip 100
     IP4_ADDR(&ip_info.netmask, 255, 255, 255, 0); // 子网掩码为255.255.255.0
 
     // 4. 创建并配置默认的以太网网络接口
@@ -269,7 +272,7 @@ void bsp_w5500_init(spi_host_device_t host) {
     dhcps_lease_t dhcps_lease;
     dhcps_lease.enable = true;
     IP4_ADDR(&dhcps_lease.start_ip, 10, 10, 99, 100);    // DHCP起始地址
-    IP4_ADDR(&dhcps_lease.end_ip, 10, 10, 99, 120);     // DHCP结束地址
+    IP4_ADDR(&dhcps_lease.end_ip, 10, 10, 99, 101);     // DHCP结束地址
     
     // 应用DHCP服务器租约配置 - 修正DHCP选项
     ESP_ERROR_CHECK(esp_netif_dhcps_option(
@@ -416,7 +419,7 @@ float bsp_get_aux_12v_voltage(void) {
 void bsp_board_init(void) {
     bsp_tf_card_init();
     bsp_ws2812_onboard_init();
-    bsp_ws2812_array_init();
+    // bsp_ws2812_array_init(); 与 matrix_init();二选一
     bsp_orin_init();
     bsp_lpn100_init();
     bsp_w5500_init(SPI3_HOST);
