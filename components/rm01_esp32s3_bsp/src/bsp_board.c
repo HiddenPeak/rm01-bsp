@@ -272,7 +272,7 @@ void bsp_w5500_init(spi_host_device_t host) {
     dhcps_lease_t dhcps_lease;
     dhcps_lease.enable = true;
     IP4_ADDR(&dhcps_lease.start_ip, 10, 10, 99, 100);    // DHCP起始地址
-    IP4_ADDR(&dhcps_lease.end_ip, 10, 10, 99, 101);     // DHCP结束地址
+    IP4_ADDR(&dhcps_lease.end_ip, 10, 10, 99, 120);     // DHCP结束地址
     
     // 应用DHCP服务器租约配置 - 修正DHCP选项
     ESP_ERROR_CHECK(esp_netif_dhcps_option(
@@ -423,7 +423,7 @@ void bsp_board_init(void) {
     bsp_orin_init();
     bsp_lpn100_init();
     bsp_w5500_init(SPI3_HOST);
-    bsp_rtl8367_init();
+    // bsp_rtl8367_init();
     bsp_voltage_init();
 }
 
