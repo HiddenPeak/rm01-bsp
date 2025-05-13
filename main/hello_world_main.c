@@ -4,10 +4,8 @@
 #include "bsp_board.h"
 #include "esp_log.h"
 #include "sdkconfig.h"
-
-// 声明 matrix_init 和 update_matrix
-extern void matrix_init();
-extern void update_matrix();
+#include "led_matrix.h"
+#include "led_animation_demo.h"
 
 void app_main(void) {
     ESP_LOGI("MAIN", "应用程序启动");
@@ -27,19 +25,25 @@ void app_main(void) {
     // ESP_LOGI("MAIN", "触摸WS2812测试完成");
     
     // 重启交换机
-    // bsp_rtl8367_init();
-
-    // 读取电压
+    // bsp_rtl8367_init();    // 读取电压
     float main_v = bsp_get_main_voltage();
     float aux_v = bsp_get_aux_12v_voltage();
     printf("Main Voltage: %.2fV, Aux 12V: %.2fV\n", main_v, aux_v);
+    
     // 初始化LED矩阵
-    matrix_init();
+    led_matrix_init();
+    
+    // 初始化示例动画
+    initialize_animation_demo();
+    ESP_LOGI("MAIN", "示例动画初始化完成");
+    // 初始化自定义动画
+
     // 重启交换机
-    // bsp_rtl8367_init();
+    // bsp_rtl8367_init();    
+    
     while (1) {
-        // 更新矩阵
-        update_matrix();
+        // 更新矩阵动画
+        led_matrix_update_animation();
         vTaskDelay(30 / portTICK_PERIOD_MS); // 约33FPS
     }
 }

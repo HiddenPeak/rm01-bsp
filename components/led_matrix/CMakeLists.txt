@@ -1,0 +1,12 @@
+idf_component_register(
+    SRCS 
+        "src/led_matrix.c"
+        "src/led_color.c"
+        "src/led_animation.c"
+        "src/led_animation_demo.c"
+    INCLUDE_DIRS 
+        "include"
+    REQUIRES 
+        "driver"
+        "led_strip"
+)
