@@ -6,10 +6,10 @@
 #include "sdkconfig.h"
 #include "led_matrix.h"
 #include "led_animation_demo.h"
+#include "ping_utils.h"
 
 void app_main(void) {
-    ESP_LOGI("MAIN", "应用程序启动");
-    bsp_board_init();
+    ESP_LOGI("MAIN", "应用程序启动");    bsp_board_init();
     ESP_LOGI("MAIN", "ESP32-S3 BSP Initialized!");
     
     // LP N100电源切换
@@ -40,6 +40,11 @@ void app_main(void) {
 
     // 重启交换机
     // bsp_rtl8367_init();    
+    
+    // 查询网络状态
+    ESP_LOGI("MAIN", "查询网络状态:");
+    vTaskDelay(5000 / portTICK_PERIOD_MS); // 等待5秒，让网络监控系统有时间收集数据
+    bsp_get_network_status();
     
     while (1) {
         // 更新矩阵动画

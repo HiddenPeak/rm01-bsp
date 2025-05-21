@@ -9,10 +9,13 @@
 #include "esp_netif_types.h" // For dhcps_lease_t
 #include "dhcpserver/dhcpserver.h"
 #include "dhcpserver/dhcpserver_options.h"
+#include "ping/ping.h"
+#include "ping/ping_sock.h"
 #include "esp_netif_ip_addr.h"
 #include "esp_mac.h" // For MAC2STR and MACSTR
 #include "color_calibration.h"
 #include <math.h>
+#include <inttypes.h> // 添加此头文件以支持 PRIuXX 宏
 #include "sdmmc_cmd.h" // 用于SD卡命令和信息打印
 
 static const char *TAG = "BSP";
@@ -82,6 +85,46 @@ adc_cali_handle_t adc2_cali_handle;
 // 以太网句柄
 esp_eth_handle_t *eth_handles = NULL;
 esp_netif_t *eth_netif = NULL;
+
+// 前置声明网络监控相关的函数
+static void bsp_init_network_monitor(void);
+static void network_monitor_task(void *pvParameters);
+static void network_ping_success_callback(esp_ping_handle_t hdl, void *args);
+static void network_ping_timeout_callback(esp_ping_handle_t hdl, void *args);
+static void network_ping_end_callback(esp_ping_handle_t hdl, void *args);
+
+// 网络监控相关定义
+typedef enum {
+    NETWORK_STATUS_UNKNOWN = 0,  // 未知状态
+    NETWORK_STATUS_UP,           // 网络连通
+    NETWORK_STATUS_DOWN,         // 网络断开
+} network_status_t;
+
+typedef struct {
+    char ip[16];            // IP地址字符串
+    ip_addr_t addr;         // IP地址结构
+    network_status_t status;     // 当前状态
+    network_status_t prev_status; // 上一次的状态
+    uint32_t last_response_time; // 最后一次响应时间(ms)
+    uint32_t average_response_time; // 平均响应时间(ms)
+    uint32_t packets_sent;   // 发送的包数
+    uint32_t packets_received; // 收到的包数
+    float loss_rate;         // 丢包率(%)
+    esp_ping_handle_t ping_handle; // ping会话句柄
+    uint8_t index;           // 目标索引，用于回调函数识别
+} network_target_t;
+
+#define NETWORK_TARGET_COUNT 4
+#define COMPUTING_MODULE_IP "10.10.99.98"   // 算力模块
+#define APPLICATION_MODULE_IP "10.10.99.99" // 应用模块
+#define USER_HOST_IP "10.10.99.100"        // 用户主机
+#define INTERNET_IP "8.8.8.8"              // 外网访问测试
+
+// 全局网络监控目标数组
+static network_target_t network_targets[NETWORK_TARGET_COUNT];
+
+// 任务句柄
+static TaskHandle_t network_monitor_task_handle = NULL;
 
 void bsp_tf_card_init(void) {
     ESP_LOGI(TAG, "初始化 TF 卡...");
@@ -333,7 +376,7 @@ void bsp_w5500_init(spi_host_device_t host) {
     dhcps_lease_t dhcps_lease;
     dhcps_lease.enable = true;
     IP4_ADDR(&dhcps_lease.start_ip, 10, 10, 99, 100);    // DHCP起始地址
-    IP4_ADDR(&dhcps_lease.end_ip, 10, 10, 99, 120);     // DHCP结束地址
+    IP4_ADDR(&dhcps_lease.end_ip, 10, 10, 99, 101);     // DHCP结束地址
     
     // 应用DHCP服务器租约配置 - 修正DHCP选项
     ESP_ERROR_CHECK(esp_netif_dhcps_option(
@@ -367,8 +410,10 @@ void bsp_w5500_init(spi_host_device_t host) {
     
     // 11. 启动以太网驱动程序
     ESP_ERROR_CHECK(esp_eth_start(eth_handles[0]));
-    
-    ESP_LOGI(TAG, "W5500 initialized as DHCP server with IP: 10.10.99.97");
+      ESP_LOGI(TAG, "W5500 initialized as DHCP server with IP: 10.10.99.97");
+
+    // 12. 启动网络监控系统
+    bsp_start_network_monitor();
 }
 
 void bsp_rtl8367_init(void) {
@@ -528,4 +573,294 @@ void bsp_lpn100_power_toggle(void) {
     gpio_set_level(BSP_LPN100_POWER_PIN, 0);
     vTaskDelay(300 / portTICK_PERIOD_MS); // 300ms，安全时间
     gpio_set_level(BSP_LPN100_POWER_PIN, 1);
+}
+
+// 网络监控的 ping 回调函数
+static void network_ping_success_callback(esp_ping_handle_t hdl, void *args)
+{
+    uint8_t ttl;
+    uint16_t seqno;
+    uint32_t elapsed_time, recv_len;
+    ip_addr_t target_addr;
+    uint8_t index = *((uint8_t*)args);
+    
+    // 获取ping结果信息
+    esp_ping_get_profile(hdl, ESP_PING_PROF_SEQNO, &seqno, sizeof(seqno));
+    esp_ping_get_profile(hdl, ESP_PING_PROF_TTL, &ttl, sizeof(ttl));
+    esp_ping_get_profile(hdl, ESP_PING_PROF_IPADDR, &target_addr, sizeof(target_addr));
+    esp_ping_get_profile(hdl, ESP_PING_PROF_SIZE, &recv_len, sizeof(recv_len));
+    esp_ping_get_profile(hdl, ESP_PING_PROF_TIMEGAP, &elapsed_time, sizeof(elapsed_time));
+    
+    // 更新目标状态
+    if (index < NETWORK_TARGET_COUNT) {
+        network_targets[index].last_response_time = elapsed_time;
+        network_targets[index].packets_received++;
+        
+        // 简单计算平均响应时间
+        if (network_targets[index].average_response_time == 0) {
+            network_targets[index].average_response_time = elapsed_time;
+        } else {
+            network_targets[index].average_response_time = 
+                (network_targets[index].average_response_time + elapsed_time) / 2;
+        }
+            
+        // 更新状态，如果之前是断开状态则打印信息
+        network_status_t prev_status = network_targets[index].status;
+        network_targets[index].status = NETWORK_STATUS_UP;
+        
+        if (prev_status != NETWORK_STATUS_UP) {
+            ESP_LOGI(TAG, "网络状态变化: %s 【已连接】, 响应时间=%" PRIu32 "ms",
+                     network_targets[index].ip, elapsed_time);
+        }
+        
+        ESP_LOGD(TAG, "Ping成功: %s, 序列号=%" PRIu16 ", 时间=%" PRIu32 "ms", 
+                 network_targets[index].ip, seqno, elapsed_time);
+    }
+}
+
+// 网络ping超时回调
+static void network_ping_timeout_callback(esp_ping_handle_t hdl, void *args)
+{
+    uint16_t seqno;
+    ip_addr_t target_addr;
+    uint8_t index = *((uint8_t*)args);
+    
+    // 获取ping超时信息
+    esp_ping_get_profile(hdl, ESP_PING_PROF_SEQNO, &seqno, sizeof(seqno));
+    esp_ping_get_profile(hdl, ESP_PING_PROF_IPADDR, &target_addr, sizeof(target_addr));
+    
+    // 更新目标状态
+    if (index < NETWORK_TARGET_COUNT) {
+        // 连续超时几次后才认为断开，这里简单判断如果收包率低于30%就认为断开
+        network_targets[index].packets_sent++;
+        float loss_rate = 0;
+        
+        if (network_targets[index].packets_sent > 0) {
+            loss_rate = 100.0f * (1.0f - (float)network_targets[index].packets_received / 
+                                  (float)network_targets[index].packets_sent);
+        }
+        
+        network_targets[index].loss_rate = loss_rate;
+        
+        if (loss_rate > 70.0f && network_targets[index].packets_sent >= 5) {
+            // 更新状态，如果之前是连接状态则打印信息
+            network_status_t prev_status = network_targets[index].status;
+            network_targets[index].status = NETWORK_STATUS_DOWN;
+            
+            if (prev_status != NETWORK_STATUS_DOWN) {
+                ESP_LOGI(TAG, "网络状态变化: %s 【已断开】, 丢包率=%.1f%%", 
+                         network_targets[index].ip, loss_rate);
+            }
+        }
+        
+        ESP_LOGD(TAG, "Ping超时: %s, 序列号=%" PRIu16 ", 丢包率=%.1f%%", 
+                 network_targets[index].ip, seqno, loss_rate);
+    }
+}
+
+// 网络ping会话完成回调
+static void network_ping_end_callback(esp_ping_handle_t hdl, void *args)
+{
+    uint32_t transmitted;
+    uint32_t received;
+    uint32_t total_time_ms;
+    uint8_t index = *((uint8_t*)args);
+    
+    esp_ping_get_profile(hdl, ESP_PING_PROF_REQUEST, &transmitted, sizeof(transmitted));
+    esp_ping_get_profile(hdl, ESP_PING_PROF_REPLY, &received, sizeof(received));
+    esp_ping_get_profile(hdl, ESP_PING_PROF_DURATION, &total_time_ms, sizeof(total_time_ms));
+    float loss_rate = 0;
+    
+    if (transmitted > 0) {
+        loss_rate = (transmitted - received) * 100.0f / transmitted;
+    }
+    
+    if (index < NETWORK_TARGET_COUNT) {
+        network_targets[index].packets_sent = transmitted;
+        network_targets[index].packets_received = received;
+        network_targets[index].loss_rate = loss_rate;
+        
+        ESP_LOGI(TAG, "Ping会话结束: %s, 发送=%" PRIu32 ", 接收=%" PRIu32 ", 丢包率=%.1f%%, 总时间=%" PRIu32 "ms",
+               network_targets[index].ip, transmitted, received, loss_rate, total_time_ms);
+            
+        // 重启ping会话，实现持续监控
+        esp_ping_stop(network_targets[index].ping_handle);
+        esp_ping_delete_session(network_targets[index].ping_handle);
+        network_targets[index].ping_handle = NULL;
+        
+        // 稍微延迟一点再重启，避免过于频繁
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        
+        // 重新启动ping
+        esp_ping_config_t ping_config = ESP_PING_DEFAULT_CONFIG();
+        ping_config.target_addr = network_targets[index].addr;      // 目标IP地址
+        ping_config.count = 10;                      // 发送10个ping包
+        ping_config.interval_ms = 1000;              // 每秒发送一次
+        ping_config.timeout_ms = 1000;               // 1秒超时
+        ping_config.task_stack_size = 4096;          // ping任务的栈大小
+        ping_config.task_prio = 1;                   // 任务优先级
+        ping_config.tos = 0;                         // 服务类型
+        ping_config.data_size = 64;                  // ICMP包数据大小
+        
+        esp_ping_callbacks_t cbs = {
+            .on_ping_success = network_ping_success_callback,
+            .on_ping_timeout = network_ping_timeout_callback,
+            .on_ping_end = network_ping_end_callback,
+            .cb_args = &network_targets[index].index
+        };
+        
+        esp_err_t ret = esp_ping_new_session(&ping_config, &cbs, &network_targets[index].ping_handle);
+        
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "创建ping会话失败: %s, 目标=%s", esp_err_to_name(ret), network_targets[index].ip);
+        } else {
+            ret = esp_ping_start(network_targets[index].ping_handle);
+            
+            if (ret != ESP_OK) {
+                ESP_LOGE(TAG, "启动ping会话失败: %s, 目标=%s", esp_err_to_name(ret), network_targets[index].ip);
+                esp_ping_delete_session(network_targets[index].ping_handle);
+                network_targets[index].ping_handle = NULL;
+            }
+        }
+    }
+}
+
+// 保留旧的接口以兼容代码
+void bsp_start_ping_test(void)
+{
+    // 转而调用网络监控系统
+    bsp_start_network_monitor();
+}
+
+// 启动网络监控
+void bsp_start_network_monitor(void)
+{
+    ESP_LOGI(TAG, "启动网络监控系统");
+    
+    // 初始化网络监控
+    bsp_init_network_monitor();
+    
+    // 创建监控任务
+    if (network_monitor_task_handle == NULL) {
+        xTaskCreate(network_monitor_task, "network_monitor", 4096, NULL, 5, &network_monitor_task_handle);
+        ESP_LOGI(TAG, "网络监控任务已启动");
+    } else {
+        ESP_LOGW(TAG, "网络监控任务已在运行");
+    }
+}
+
+// 停止网络监控
+void bsp_stop_network_monitor(void)
+{
+    ESP_LOGI(TAG, "停止网络监控系统");
+    
+    // 停止任务
+    if (network_monitor_task_handle != NULL) {
+        // 停止所有ping会话
+        for (int i = 0; i < NETWORK_TARGET_COUNT; i++) {
+            if (network_targets[i].ping_handle != NULL) {
+                esp_ping_stop(network_targets[i].ping_handle);
+                esp_ping_delete_session(network_targets[i].ping_handle);
+                network_targets[i].ping_handle = NULL;
+            }
+        }
+        
+        // 删除任务
+        vTaskDelete(network_monitor_task_handle);
+        network_monitor_task_handle = NULL;
+        ESP_LOGI(TAG, "网络监控任务已停止");
+    }
+}
+
+// 获取网络状态
+void bsp_get_network_status(void)
+{
+    ESP_LOGI(TAG, "网络状态报告:");
+    
+    for (int i = 0; i < NETWORK_TARGET_COUNT; i++) {
+        const char *status_str = "未知";
+        if (network_targets[i].status == NETWORK_STATUS_UP) {
+            status_str = "连接";
+        } else if (network_targets[i].status == NETWORK_STATUS_DOWN) {
+            status_str = "断开";
+        }
+        
+        ESP_LOGI(TAG, "目标 %s: 状态=%s, 响应时间=%" PRIu32 "ms, 丢包率=%.1f%%",
+                 network_targets[i].ip, status_str, 
+                 network_targets[i].last_response_time,
+                 network_targets[i].loss_rate);
+    }
+}
+
+// 初始化网络监控系统
+static void bsp_init_network_monitor(void)
+{
+    // 配置目标IP和状态
+    strncpy(network_targets[0].ip, COMPUTING_MODULE_IP, sizeof(network_targets[0].ip));
+    strncpy(network_targets[1].ip, APPLICATION_MODULE_IP, sizeof(network_targets[1].ip));
+    strncpy(network_targets[2].ip, USER_HOST_IP, sizeof(network_targets[2].ip));
+    strncpy(network_targets[3].ip, INTERNET_IP, sizeof(network_targets[3].ip));
+    
+    // 设置索引和初始状态
+    for (int i = 0; i < NETWORK_TARGET_COUNT; i++) {
+        network_targets[i].index = i;
+        network_targets[i].status = NETWORK_STATUS_UNKNOWN;
+        network_targets[i].prev_status = NETWORK_STATUS_UNKNOWN;
+        ipaddr_aton(network_targets[i].ip, &network_targets[i].addr);
+    }
+    
+    ESP_LOGI(TAG, "网络监控系统初始化完成, 监控 %d 个目标", NETWORK_TARGET_COUNT);
+}
+
+// 网络监控任务函数
+static void network_monitor_task(void *pvParameters)
+{
+    ESP_LOGI(TAG, "网络监控任务开始运行");
+    
+    // 启动对所有目标的ping
+    for (int i = 0; i < NETWORK_TARGET_COUNT; i++) {
+        esp_ping_config_t ping_config = ESP_PING_DEFAULT_CONFIG();
+        
+        ping_config.target_addr = network_targets[i].addr;      // 目标IP地址
+        ping_config.count = 10;                      // 发送10个ping包
+        ping_config.interval_ms = 1000;              // 每秒发送一次
+        ping_config.timeout_ms = 1000;               // 1秒超时
+        ping_config.task_stack_size = 4096;          // ping任务的栈大小
+        ping_config.task_prio = 1;                   // 任务优先级
+        ping_config.tos = 0;                         // 服务类型
+        ping_config.data_size = 64;                  // ICMP包数据大小
+        
+        esp_ping_callbacks_t cbs = {
+            .on_ping_success = network_ping_success_callback,
+            .on_ping_timeout = network_ping_timeout_callback,
+            .on_ping_end = network_ping_end_callback,
+            .cb_args = &network_targets[i].index
+        };
+        
+        ESP_LOGI(TAG, "开始ping测试，目标: %s (索引 %d)", network_targets[i].ip, i);
+        
+        esp_err_t ret = esp_ping_new_session(&ping_config, &cbs, &network_targets[i].ping_handle);
+        
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "创建ping会话失败: %s, 目标=%s", esp_err_to_name(ret), network_targets[i].ip);
+        } else {
+            ret = esp_ping_start(network_targets[i].ping_handle);
+            
+            if (ret != ESP_OK) {
+                ESP_LOGE(TAG, "启动ping会话失败: %s, 目标=%s", esp_err_to_name(ret), network_targets[i].ip);
+                esp_ping_delete_session(network_targets[i].ping_handle);
+                network_targets[i].ping_handle = NULL;
+            }
+        }
+        
+        // 稍微间隔一下，避免同时发起多个ping导致网络压力
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+    
+    // 任务主循环
+    while (1) {
+        // 定期打印汇总信息
+        vTaskDelay(pdMS_TO_TICKS(30000)); // 每30秒打印一次汇总信息
+        bsp_get_network_status();
+    }
 }

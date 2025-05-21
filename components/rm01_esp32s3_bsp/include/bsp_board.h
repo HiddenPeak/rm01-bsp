@@ -110,6 +110,11 @@ void bsp_lpn100_power_toggle(void);
 float bsp_get_main_voltage(void);
 float bsp_get_aux_12v_voltage(void);
 
+// 网络监控函数
+void bsp_start_ping_test(void); // 保留旧的接口
+void bsp_start_network_monitor(void); // 启动网络监控
+void bsp_stop_network_monitor(void);  // 停止网络监控
+void bsp_get_network_status(void);    // 获取网络状态
 
 
 #endif

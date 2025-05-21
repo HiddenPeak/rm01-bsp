@@ -5,7 +5,7 @@
     "idf.openOcdConfigs": [
         "board/esp32s3-builtin.cfg"
     ],
-    "idf.portWin": "COM5",
+    "idf.portWin": "COM17",
     "idf.toolsPathWin": "C:\\Users\\sprin\\.espressif",
     "idf.customExtraVars": {
         "IDF_TARGET": "esp32s3"
@@ -23,6 +23,9 @@
         "sdkconfig.h": "c",
         "string.h": "c",
         "esp_netif.h": "c",
-        "adc_cali.h": "c"
+        "adc_cali.h": "c",
+        "ethernet_init.h": "c",
+        "dhcpserver.h": "c",
+        "dhcpserver_options.h": "c"
     }
 }
