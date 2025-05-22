@@ -113,91 +113,6 @@ const network_target_t* bsp_get_network_targets(void) {
     return network_targets;
 }
 
-void bsp_tf_card_init(void) {
-    ESP_LOGI(TAG, "初始化 TF 卡...");
-    
-    // 主机配置
-    sdmmc_host_t host = SDMMC_HOST_DEFAULT();
-    host.slot = SDMMC_HOST_SLOT_1;
-    host.max_freq_khz = SDMMC_FREQ_HIGHSPEED;
-
-    // 插槽配置
-    sdmmc_slot_config_t slot_config = SDMMC_SLOT_CONFIG_DEFAULT();
-    slot_config.clk = BSP_TF_CK_PIN;
-    slot_config.cmd = BSP_TF_CMD_PIN;
-    slot_config.d0 = BSP_TF_D0_PIN;
-    slot_config.d1 = BSP_TF_D1_PIN;
-    slot_config.d2 = BSP_TF_D2_PIN;
-    slot_config.d3 = BSP_TF_D3_PIN;
-    slot_config.width = 4; // 4-bit模式
-    slot_config.flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP; // 使用内部上拉
-
-    // 初始化SDMMC主机
-    esp_err_t ret = sdmmc_host_init();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "SDMMC主机初始化失败: %s", esp_err_to_name(ret));
-        return;
-    }
-    
-    // 初始化SDMMC插槽
-    ret = sdmmc_host_init_slot(host.slot, &slot_config);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "SDMMC插槽初始化失败: %s", esp_err_to_name(ret));
-        sdmmc_host_deinit();
-        return;
-    }
-    
-    // SD卡信息结构体
-    sdmmc_card_t* card = (sdmmc_card_t*)malloc(sizeof(sdmmc_card_t));
-    if (card == NULL) {
-        ESP_LOGE(TAG, "Failed to allocate memory for SD card structure");
-        sdmmc_host_deinit();
-        return;
-    }
-      // 探测SD卡并获取卡信息
-    ret = sdmmc_card_init(&host, card);
-    if (ret != ESP_OK) {
-        if (ret == ESP_ERR_NOT_FOUND) {
-            ESP_LOGW(TAG, "未检测到SD卡，请检查SD卡是否正确插入");
-        } else {
-            ESP_LOGE(TAG, "SD卡初始化失败: %s", esp_err_to_name(ret));
-        }
-        free(card); // Free allocated memory on failure
-        sdmmc_host_deinit();
-        return;
-    }
-    
-    // 打印SD卡信息
-    ESP_LOGI(TAG, "SD卡信息:");
-    ESP_LOGI(TAG, "卡名称: %s", card->cid.name);
-    ESP_LOGI(TAG, "卡类型: %s", (card->ocr & (1 << 30)) ? "SDHC/SDXC" : "SDSC"); // bit 30 表示 SDHC/SDXC 卡
-    ESP_LOGI(TAG, "卡速度: %s", (card->csd.tr_speed > 25000000) ? "高速" : "标准速度");
-    ESP_LOGI(TAG, "卡容量: %lluMB", ((uint64_t) card->csd.capacity) * card->csd.sector_size / (1024 * 1024));
-      // 保持卡挂载，不释放主机资源
-    // 注意：要使用文件系统，需要在CMakeLists中添加fatfs组件，并使用esp_vfs_fat_sdmmc_mount函数
-    
-    // 读取并打印SD卡第一个扇区内容作为演示
-    uint8_t *buffer = malloc(card->csd.sector_size);
-    if (buffer) {
-        ret = sdmmc_read_sectors(card, buffer, 0, 1);
-        if (ret == ESP_OK) {
-            ESP_LOGI(TAG, "SD卡第一个扇区前16字节内容:");
-            for (int i = 0; i < 16 && i < card->csd.sector_size; i++) {
-                printf("%02x ", buffer[i]);
-                if ((i + 1) % 8 == 0) {
-                    printf("\n");
-                }
-            }
-            printf("\n");
-        } else {
-            ESP_LOGE(TAG, "读取SD卡扇区失败: %s", esp_err_to_name(ret));
-        }
-        free(buffer);
-    }
-    
-    ESP_LOGI(TAG, "TF卡初始化完成");
-}
-
 void bsp_ws2812_onboard_init(void) {
     led_strip_config_t strip_config = {
         .strip_gpio_num = BSP_WS2812_ONBOARD_PIN,
@@ -521,7 +436,6 @@ float bsp_get_aux_12v_voltage(void) {
 }
 
 void bsp_board_init(void) {
-    bsp_tf_card_init();
     bsp_ws2812_onboard_init();
     // bsp_ws2812_array_init(); 与 matrix_init();二选一
     bsp_orin_init();

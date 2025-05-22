@@ -112,7 +112,6 @@ extern adc_cali_handle_t adc2_cali_handle;
 void bsp_board_init(void);
 
 // 子模块初始化
-void bsp_tf_card_init(void);
 void bsp_ws2812_onboard_init(void);
 void bsp_ws2812_array_init(void);
 void bsp_orin_init(void);
