@@ -30,7 +30,7 @@
         document.addEventListener('DOMContentLoaded', fetchNetworkStatus);
         
         // 自动定期刷新
-        setInterval(fetchNetworkStatus, 3000); // 每3秒刷新一次
+        setInterval(fetchNetworkStatus, 1000); // 每3秒刷新一次
         
         function fetchNetworkStatus() {
             fetch('/api/network')
