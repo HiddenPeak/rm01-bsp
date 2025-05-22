@@ -12,6 +12,7 @@
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
 #include "ethernet_init.h"
+#include "bsp_webserver.h" // 添加Webserver头文件引用
 
 // 网络监控相关定义
 typedef enum {

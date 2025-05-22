@@ -7,7 +7,7 @@
 #include "led_matrix.h"
 #include "led_animation_demo.h"
 #include "ping_utils.h"
-#include "webserver.h"
+// 不再需要单独的webserver.h，因为它已包含在bsp_board.h中
 
 void app_main(void) {
     ESP_LOGI("MAIN", "应用程序启动");
@@ -40,14 +40,13 @@ void app_main(void) {
     // 初始化示例动画
     initialize_animation_demo();
     ESP_LOGI("MAIN", "示例动画初始化完成");
-    
-    // 查询网络状态
+      // 查询网络状态
     ESP_LOGI("MAIN", "查询网络状态:");
     vTaskDelay(5000 / portTICK_PERIOD_MS); // 等待5秒，让网络监控系统有时间收集数据
     bsp_get_network_status();
     
     // 启动Web服务器
-    esp_err_t ret = start_webserver();
+    esp_err_t ret = bsp_start_webserver();
     if (ret != ESP_OK) {
         ESP_LOGE("MAIN", "Web服务器启动失败: %s", esp_err_to_name(ret));
     } else {

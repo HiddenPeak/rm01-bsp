@@ -1,19 +1,26 @@
-#include "webserver.h"
+#include "bsp_webserver.h"
+#include "bsp_board.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
 #include "esp_vfs.h"
 #include "esp_vfs_fat.h"
 #include "esp_timer.h"
 #include "sdmmc_cmd.h"
-#include "bsp_board.h"
 #include "cJSON.h"
 #include <string.h>
 #include <sys/param.h>
 #include <fcntl.h>
 #include <dirent.h>
 #include <errno.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
-static const char *TAG = "WEBSERVER";
+static const char *TAG = "BSP_WEBSERVER";
+
+// 函数声明
+static esp_err_t mount_fs(void);
+static esp_err_t unmount_fs(void);
+static void create_default_webfiles(void);
 
 // TF卡挂载点 - 在ESP32中使用更简单的路径
 #define MOUNT_POINT "/data"
@@ -147,9 +154,306 @@ static esp_err_t mount_fs(void) {
             file_count++;
         }
         closedir(dir);
+        
+        // 如果目录为空，创建默认页面
+        if (file_count == 0) {
+            ESP_LOGI(TAG, "Web文件夹为空，创建默认文件");
+            create_default_webfiles();
+        }
     }
 
     return ESP_OK;
+}
+
+// 创建默认网页文件
+static void create_default_webfiles(void) {
+    // 默认的index.html内容
+    const char *default_index_html = "<!DOCTYPE html>\n"
+        "<html lang=\"zh-CN\">\n"
+        "<head>\n"
+        "    <meta charset=\"UTF-8\">\n"
+        "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
+        "    <title>RMinte RM-01 板载网络监控系统</title>\n"
+        "    <link rel=\"stylesheet\" href=\"style.css\">\n"
+        "</head>\n"
+        "<body>\n"
+        "    <div class=\"header\">\n"
+        "        <div class=\"container\">\n"
+        "            <h1>RMinte RM-01 板载网络监控系统</h1>\n"
+        "        </div>\n"
+        "    </div>\n"
+        "    \n"
+        "    <div class=\"container\">\n"
+        "        <button id=\"refresh\" class=\"refresh-button\">刷新数据</button>\n"
+        "        <div id=\"timestamp\">上次更新时间: -</div>\n"
+        "        <div id=\"status-container\"></div>\n"
+        "        \n"
+        "        <footer>\n"
+        "           RMinte RM-01 板载网络监控系统 &copy; 2025\n"
+        "        </footer>\n"
+        "    </div>\n"
+        "    \n"
+        "    <script>\n"
+        "        document.getElementById('refresh').addEventListener('click', fetchNetworkStatus);\n"
+        "        \n"
+        "        // 页面加载时获取数据\n"
+        "        document.addEventListener('DOMContentLoaded', fetchNetworkStatus);\n"
+        "        \n"
+        "        // 自动定期刷新\n"
+        "        setInterval(fetchNetworkStatus, 3000); // 每3秒刷新一次\n"
+        "        \n"
+        "        function fetchNetworkStatus() {\n"
+        "            fetch('/api/network')\n"
+        "                .then(response => response.json())\n"
+        "                .then(data => {\n"
+        "                    updateStatusDisplay(data);\n"
+        "                })\n"
+        "                .catch(error => {\n"
+        "                    console.error('获取网络状态失败:', error);\n"
+        "                });\n"
+        "        }\n"
+        "        \n"
+        "        function updateStatusDisplay(data) {\n"
+        "            const container = document.getElementById('status-container');\n"
+        "            container.innerHTML = '';\n"
+        "            \n"
+        "            // 更新时间戳\n"
+        "            const timestamp = new Date(data.timestamp * 1000).toLocaleString();\n"
+        "            document.getElementById('timestamp').textContent = '上次更新时间: ' + timestamp;\n"
+        "            \n"
+        "            // 更新每个目标的状态\n"
+        "            data.targets.forEach(target => {\n"
+        "                const statusClass = getStatusClass(target.status);\n"
+        "                const indicatorClass = getIndicatorClass(target.status);\n"
+        "                \n"
+        "                const card = document.createElement('div');\n"
+        "                card.className = 'status-card ' + statusClass;\n"
+        "                \n"
+        "                const statusIndicator = `<span class=\"status-indicator ${indicatorClass}\"></span>`;\n"
+        "                \n"
+        "                card.innerHTML = `\n"
+        "                    <h3>${statusIndicator}${target.name} (${target.ip})</h3>\n"
+        "                    <div class=\"status-details\">\n"
+        "                        <div class=\"status-item\">\n"
+        "                            <div class=\"status-label\">状态</div>\n"
+        "                            <div class=\"status-value\">${getStatusText(target.status)}</div>\n"
+        "                        </div>\n"
+        "                        <div class=\"status-item\">\n"
+        "                            <div class=\"status-label\">响应时间</div>\n"
+        "                            <div class=\"status-value\">${target.response_time} ms</div>\n"
+        "                        </div>\n"
+        "                        <div class=\"status-item\">\n"
+        "                            <div class=\"status-label\">丢包率</div>\n"
+        "                            <div class=\"status-value\">${target.loss_rate.toFixed(1)}%</div>\n"
+        "                        </div>\n"
+        "                    </div>\n"
+        "                `;\n"
+        "                \n"
+        "                container.appendChild(card);\n"
+        "            });\n"
+        "        }\n"
+        "        \n"
+        "        function getStatusClass(status) {\n"
+        "            switch(status) {\n"
+        "                case 'UP': return 'status-up';\n"
+        "                case 'DOWN': return 'status-down';\n"
+        "                default: return 'status-unknown';\n"
+        "            }\n"
+        "        }\n"
+        "        \n"
+        "        function getIndicatorClass(status) {\n"
+        "            switch(status) {\n"
+        "                case 'UP': return 'indicator-up';\n"
+        "                case 'DOWN': return 'indicator-down';\n"
+        "                default: return 'indicator-unknown';\n"
+        "            }\n"
+        "        }\n"
+        "        \n"
+        "        function getStatusText(status) {\n"
+        "            switch(status) {\n"
+        "                case 'UP': return '已连接';\n"
+        "                case 'DOWN': return '已断开';\n"
+        "                default: return '未知';\n"
+        "            }\n"
+        "        }\n"
+        "    </script>\n"
+        "</body>\n"
+        "</html>";
+
+    // 默认的style.css内容
+    const char *default_style_css = "/* 网络监控系统样式表 */\n"
+        "body {\n"
+        "    font-family: 'Microsoft YaHei', Arial, sans-serif;\n"
+        "    margin: 0;\n"
+        "    padding: 0;\n"
+        "    background-color: #f5f5f5;\n"
+        "    color: #333;\n"
+        "}\n"
+        "\n"
+        ".container {\n"
+        "    max-width: 800px;\n"
+        "    margin: 0 auto;\n"
+        "    padding: 20px;\n"
+        "}\n"
+        "\n"
+        "h1 {\n"
+        "    color: #2c3e50;\n"
+        "    text-align: center;\n"
+        "    margin-bottom: 30px;\n"
+        "}\n"
+        "\n"
+        ".header {\n"
+        "    background-color: #3498db;\n"
+        "    color: white;\n"
+        "    padding: 20px 0;\n"
+        "    margin-bottom: 20px;\n"
+        "    box-shadow: 0 2px 5px rgba(0,0,0,0.1);\n"
+        "}\n"
+        "\n"
+        ".header h1 {\n"
+        "    color: white;\n"
+        "    margin: 0;\n"
+        "}\n"
+        "\n"
+        ".status-card {\n"
+        "    background-color: white;\n"
+        "    border-radius: 10px;\n"
+        "    padding: 20px;\n"
+        "    margin-bottom: 15px;\n"
+        "    box-shadow: 0 2px 5px rgba(0,0,0,0.1);\n"
+        "    transition: all 0.3s ease;\n"
+        "}\n"
+        "\n"
+        ".status-card:hover {\n"
+        "    transform: translateY(-3px);\n"
+        "    box-shadow: 0 5px 15px rgba(0,0,0,0.1);\n"
+        "}\n"
+        "\n"
+        ".status-up {\n"
+        "    border-left: 5px solid #2ecc71;\n"
+        "}\n"
+        "\n"
+        ".status-down {\n"
+        "    border-left: 5px solid #e74c3c;\n"
+        "}\n"
+        "\n"
+        ".status-unknown {\n"
+        "    border-left: 5px solid #95a5a6;\n"
+        "}\n"
+        "\n"
+        ".refresh-button {\n"
+        "    display: block;\n"
+        "    width: 100%;\n"
+        "    padding: 12px;\n"
+        "    background-color: #3498db;\n"
+        "    color: white;\n"
+        "    border: none;\n"
+        "    border-radius: 5px;\n"
+        "    font-size: 16px;\n"
+        "    cursor: pointer;\n"
+        "    transition: background-color 0.3s;\n"
+        "    margin-bottom: 15px;\n"
+        "}\n"
+        "\n"
+        ".refresh-button:hover {\n"
+        "    background-color: #2980b9;\n"
+        "}\n"
+        "\n"
+        "#timestamp {\n"
+        "    text-align: center;\n"
+        "    color: #7f8c8d;\n"
+        "    margin-bottom: 20px;\n"
+        "    font-size: 14px;\n"
+        "}\n"
+        "\n"
+        ".status-details {\n"
+        "    display: flex;\n"
+        "    justify-content: space-between;\n"
+        "    margin-top: 10px;\n"
+        "}\n"
+        "\n"
+        ".status-item {\n"
+        "    text-align: center;\n"
+        "    flex: 1;\n"
+        "}\n"
+        "\n"
+        ".status-label {\n"
+        "    font-size: 12px;\n"
+        "    color: #7f8c8d;\n"
+        "}\n"
+        "\n"
+        ".status-value {\n"
+        "    font-size: 16px;\n"
+        "    font-weight: bold;\n"
+        "    margin-top: 5px;\n"
+        "}\n"
+        "\n"
+        ".status-indicator {\n"
+        "    display: inline-block;\n"
+        "    width: 12px;\n"
+        "    height: 12px;\n"
+        "    border-radius: 50%;\n"
+        "    margin-right: 10px;\n"
+        "}\n"
+        "\n"
+        ".indicator-up {\n"
+        "    background-color: #2ecc71;\n"
+        "}\n"
+        "\n"
+        ".indicator-down {\n"
+        "    background-color: #e74c3c;\n"
+        "}\n"
+        "\n"
+        ".indicator-unknown {\n"
+        "    background-color: #95a5a6;\n"
+        "}\n"
+        "\n"
+        "footer {\n"
+        "    text-align: center;\n"
+        "    padding: 20px;\n"
+        "    margin-top: 40px;\n"
+        "    color: #7f8c8d;\n"
+        "    font-size: 12px;\n"
+        "}\n"
+        "\n"
+        "@media (max-width: 600px) {\n"
+        "    .container {\n"
+        "        padding: 10px;\n"
+        "    }\n"
+        "    \n"
+        "    .status-details {\n"
+        "        flex-direction: column;\n"
+        "    }\n"
+        "    \n"
+        "    .status-item {\n"
+        "        margin-bottom: 10px;\n"
+        "    }\n"
+        "}";
+
+    char filepath[1024];
+    FILE *file;
+    
+    // 创建 index.html 文件
+    snprintf(filepath, sizeof(filepath), "%s/index.html", WEB_FOLDER);
+    file = fopen(filepath, "w");
+    if (file) {
+        fputs(default_index_html, file);
+        fclose(file);
+        ESP_LOGI(TAG, "创建了默认 index.html 文件");
+    } else {
+        ESP_LOGE(TAG, "无法创建 index.html 文件: %s (errno: %d)", filepath, errno);
+    }
+    
+    // 创建 style.css 文件
+    snprintf(filepath, sizeof(filepath), "%s/style.css", WEB_FOLDER);
+    file = fopen(filepath, "w");
+    if (file) {
+        fputs(default_style_css, file);
+        fclose(file);
+        ESP_LOGI(TAG, "创建了默认 style.css 文件");
+    } else {
+        ESP_LOGE(TAG, "无法创建 style.css 文件: %s (errno: %d)", filepath, errno);
+    }
 }
 
 // 卸载文件系统
@@ -495,7 +799,7 @@ static void webserver_task(void *pvParameters) {
 }
 
 // 启动Web服务器
-esp_err_t start_webserver(void) {
+esp_err_t bsp_start_webserver(void) {
     // 在单独的任务中启动Web服务器，避免主任务堆栈溢出
     static TaskHandle_t webserver_task_handle = NULL;
     BaseType_t xReturned;
@@ -525,7 +829,7 @@ esp_err_t start_webserver(void) {
 }
 
 // 停止Web服务器
-void stop_webserver(void) {
+void bsp_stop_webserver(void) {
     if (s_server) {
         httpd_stop(s_server);
         s_server = NULL;
