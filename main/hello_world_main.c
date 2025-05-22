@@ -7,7 +7,6 @@
 #include "led_matrix.h"
 #include "led_animation_demo.h"
 #include "ping_utils.h"
-// 不再需要单独的webserver.h，因为它已包含在bsp_board.h中
 
 void app_main(void) {
     ESP_LOGI("MAIN", "应用程序启动");
