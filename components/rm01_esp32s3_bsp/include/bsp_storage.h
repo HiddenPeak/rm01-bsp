@@ -8,6 +8,11 @@
 extern "C" {
 #endif
 
+// TF卡挂载点
+#define MOUNT_POINT "/sdcard"
+// Web文件目录
+#define WEB_FOLDER "/sdcard/web"
+
 /**
  * @brief 初始化并挂载SD卡
  * 

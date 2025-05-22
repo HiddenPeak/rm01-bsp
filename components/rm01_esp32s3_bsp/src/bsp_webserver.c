@@ -16,24 +16,11 @@
 
 static const char *TAG = "BSP_WEBSERVER";
 
-// 函数声明
-static esp_err_t mount_fs(void);
-static esp_err_t unmount_fs(void);
-
-// TF卡挂载点 - 在ESP32中使用更简单的路径
-#define MOUNT_POINT "/sdcard"
-// Web文件目录
-#define WEB_FOLDER "/sdcard/web"
 // 缓冲区大小
 #define FILE_BUFFER_SIZE 4096
 
-// 文件系统句柄
-static sdmmc_card_t *s_card = NULL;
 // HTTP服务器句柄
 static httpd_handle_t s_server = NULL;
-
-// 状态判断变量
-static bool s_fs_mounted = false;
 
 // MIME类型映射
 typedef struct {
@@ -69,53 +56,6 @@ static const char* get_mime_type(const char *filename) {
         }
     }
     return mime_types[sizeof(mime_types)/sizeof(mime_types[0]) - 1].mime_type;
-}
-
-// 挂载TF卡文件系统
-static esp_err_t mount_fs(void) {
-    if (s_fs_mounted) {
-        ESP_LOGI(TAG, "文件系统已挂载");
-        return ESP_OK;
-    }
-
-    // 使用存储模块挂载SD卡
-    esp_err_t ret = bsp_storage_sdcard_mount(MOUNT_POINT);
-    if (ret != ESP_OK) {
-        return ret;
-    }
-    
-    // 获取SD卡信息
-    s_card = bsp_storage_sdcard_get_info();
-    
-    // 检查web文件夹是否存在
-    ret = bsp_storage_create_dir_if_not_exists(WEB_FOLDER);
-    if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "创建web文件夹失败，但将继续尝试");
-    }
-    
-    s_fs_mounted = true;
-    
-    // 列出web文件夹内容
-    bsp_storage_list_dir(WEB_FOLDER);
-
-    return ESP_OK;
-}
-
-// 卸载文件系统
-static esp_err_t unmount_fs(void) {
-    if (!s_fs_mounted) {
-        return ESP_OK;
-    }
-    
-    esp_err_t ret = bsp_storage_sdcard_unmount(MOUNT_POINT);
-    if (ret != ESP_OK) {
-        return ret;
-    }
-    
-    s_fs_mounted = false;
-    s_card = NULL;
-    ESP_LOGI(TAG, "文件系统已卸载");
-    return ESP_OK;
 }
 
 // 处理根请求，重定向到index.htm
@@ -357,13 +297,22 @@ static esp_err_t network_status_handler(httpd_req_t *req) {
 static void webserver_task(void *pvParameters) {
     ESP_LOGI(TAG, "Web服务器任务开始运行");
     
-    // 挂载文件系统
-    esp_err_t ret = mount_fs();
+    // 使用存储模块挂载SD卡
+    esp_err_t ret = bsp_storage_sdcard_mount(MOUNT_POINT);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "文件系统挂载失败，Web服务器任务退出");
         vTaskDelete(NULL);
         return;
     }
+    
+    // 确保web文件夹存在
+    ret = bsp_storage_create_dir_if_not_exists(WEB_FOLDER);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "创建web文件夹失败，但将继续尝试");
+    }
+    
+    // 列出web文件夹内容
+    bsp_storage_list_dir(WEB_FOLDER);
     
     // 检查index.htm文件是否存在，如果不存在则创建
     char filepath[1024];
@@ -378,13 +327,11 @@ static void webserver_task(void *pvParameters) {
         snprintf(dir_path, sizeof(dir_path), "%s/", WEB_FOLDER);
         
         DIR *dir = opendir(dir_path);
-        // bool found = false;
         if (dir) {
             struct dirent *entry;
             while ((entry = readdir(dir)) != NULL) {
                 if (strncasecmp(entry->d_name, "index", 5) == 0 && 
                     (strstr(entry->d_name, ".htm") || strstr(entry->d_name, ".HTM"))) {
-                    // found = true;
                     break;
                 }
             }
@@ -400,7 +347,7 @@ static void webserver_task(void *pvParameters) {
     ESP_LOGI(TAG, "启动HTTP服务器");
     if (httpd_start(&s_server, &config) != ESP_OK) {
         ESP_LOGE(TAG, "启动HTTP服务器失败");
-        unmount_fs();
+        bsp_storage_sdcard_unmount(MOUNT_POINT);
         vTaskDelete(NULL);
         return;
     }
@@ -481,5 +428,5 @@ void bsp_stop_webserver(void) {
     }
     
     // 卸载文件系统
-    unmount_fs();
+    bsp_storage_sdcard_unmount(MOUNT_POINT);
 }
