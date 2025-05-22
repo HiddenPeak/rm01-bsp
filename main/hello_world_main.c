@@ -7,9 +7,11 @@
 #include "led_matrix.h"
 #include "led_animation_demo.h"
 #include "ping_utils.h"
+#include "webserver.h"
 
 void app_main(void) {
-    ESP_LOGI("MAIN", "应用程序启动");    bsp_board_init();
+    ESP_LOGI("MAIN", "应用程序启动");
+    bsp_board_init();
     ESP_LOGI("MAIN", "ESP32-S3 BSP Initialized!");
     
     // LP N100电源切换
@@ -25,7 +27,9 @@ void app_main(void) {
     // ESP_LOGI("MAIN", "触摸WS2812测试完成");
     
     // 重启交换机
-    // bsp_rtl8367_init();    // 读取电压
+    // bsp_rtl8367_init();
+    
+    // 读取电压
     float main_v = bsp_get_main_voltage();
     float aux_v = bsp_get_aux_12v_voltage();
     printf("Main Voltage: %.2fV, Aux 12V: %.2fV\n", main_v, aux_v);
@@ -36,15 +40,19 @@ void app_main(void) {
     // 初始化示例动画
     initialize_animation_demo();
     ESP_LOGI("MAIN", "示例动画初始化完成");
-    // 初始化自定义动画
-
-    // 重启交换机
-    // bsp_rtl8367_init();    
     
     // 查询网络状态
     ESP_LOGI("MAIN", "查询网络状态:");
     vTaskDelay(5000 / portTICK_PERIOD_MS); // 等待5秒，让网络监控系统有时间收集数据
     bsp_get_network_status();
+    
+    // 启动Web服务器
+    esp_err_t ret = start_webserver();
+    if (ret != ESP_OK) {
+        ESP_LOGE("MAIN", "Web服务器启动失败: %s", esp_err_to_name(ret));
+    } else {
+        ESP_LOGI("MAIN", "Web服务器已启动，请使用浏览器访问 http://10.10.99.97/");
+    }
     
     while (1) {
         // 更新矩阵动画

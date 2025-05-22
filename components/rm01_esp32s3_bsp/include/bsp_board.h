@@ -13,6 +13,29 @@
 #include "esp_adc/adc_cali.h"
 #include "ethernet_init.h"
 
+// 网络监控相关定义
+typedef enum {
+    NETWORK_STATUS_UNKNOWN = 0,  // 未知状态
+    NETWORK_STATUS_UP,           // 网络连通
+    NETWORK_STATUS_DOWN,         // 网络断开
+} network_status_t;
+
+typedef struct {
+    char ip[16];            // IP地址字符串
+    char name[32];          // 目标名称
+    network_status_t status;     // 当前状态
+    network_status_t prev_status; // 上一次的状态
+    uint32_t last_response_time; // 最后一次响应时间(ms)
+    uint32_t average_response_time; // 平均响应时间(ms)
+    uint32_t packets_sent;   // 发送的包数
+    uint32_t packets_received; // 收到的包数
+    float loss_rate;         // 丢包率(%)
+    void *ping_handle; // ping会话句柄，类型改为void*以避免包含过多头文件
+    uint8_t index;           // 目标索引，用于回调函数识别
+} network_target_t;
+
+#define NETWORK_TARGET_COUNT 4
+
 // touchpad and status led(ws2812)
 #define BSP_TOUCHPAD_PIN 14
 #define BSP_WS2812_Touch_LED_PIN 45
@@ -115,6 +138,6 @@ void bsp_start_ping_test(void); // 保留旧的接口
 void bsp_start_network_monitor(void); // 启动网络监控
 void bsp_stop_network_monitor(void);  // 停止网络监控
 void bsp_get_network_status(void);    // 获取网络状态
-
+const network_target_t* bsp_get_network_targets(void); // 获取网络监控目标数组
 
 #endif
