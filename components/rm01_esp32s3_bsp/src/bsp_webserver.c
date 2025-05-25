@@ -11,6 +11,7 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include <errno.h>
+#include "network_monitor.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -251,7 +252,7 @@ static esp_err_t network_status_handler(httpd_req_t *req) {
     cJSON_AddNumberToObject(root, "timestamp", esp_timer_get_time() / 1000000); // 秒
     
     // 获取网络监控数据
-    const network_target_t *network_targets = bsp_get_network_targets();
+    const network_target_t *network_targets = nm_get_network_targets();
     
     // 构建每个目标的状态信息
     for (int i = 0; i < NETWORK_TARGET_COUNT; i++) {

@@ -2,6 +2,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "bsp_board.h"
+#include "bsp_ws2812.h"
 #include "esp_log.h"
 #include "sdkconfig.h"
 #include "led_matrix.h"
@@ -42,7 +43,7 @@ void app_main(void) {
       // 查询网络状态
     ESP_LOGI("MAIN", "查询网络状态:");
     vTaskDelay(5000 / portTICK_PERIOD_MS); // 等待5秒，让网络监控系统有时间收集数据
-    bsp_get_network_status();
+    nm_get_network_status();
     
     // 启动Web服务器
     esp_err_t ret = bsp_start_webserver();

@@ -1,7 +1,7 @@
 {
     "C_Cpp.intelliSenseEngine": "default",
     "idf.espIdfPathWin": "C:\\Users\\sprin\\esp\\v5.4.1\\esp-idf",
-    "idf.pythonInstallPath": "C:\\Users\\sprin\\.espressif\\tools\\idf-python\\3.11.2\\python.exe",
+    "idf.pythonInstallPath": "/Users/thomas/miniconda3/bin/python",
     "idf.openOcdConfigs": [
         "board/esp32s3-builtin.cfg"
     ],
@@ -27,5 +27,6 @@
         "ethernet_init.h": "c",
         "dhcpserver.h": "c",
         "dhcpserver_options.h": "c"
-    }
+    },
+    "idf.port": "/dev/tty.usbmodem1101"
 }

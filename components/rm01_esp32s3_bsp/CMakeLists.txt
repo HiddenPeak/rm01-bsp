@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "src/bsp_board.c" "src/network_monitor.c" "src/bsp_webserver.c" "src/bsp_storage.c"
+    SRCS "src/bsp_board.c" "src/bsp_power.c" "src/network_monitor.c" "src/bsp_webserver.c" "src/bsp_storage.c" "src/bsp_network.c" "src/bsp_ws2812.c"
     INCLUDE_DIRS "include"
     REQUIRES driver sdmmc esp_adc led_strip esp_event esp_netif esp_eth espressif__ethernet_init esp_timer esp_http_server fatfs vfs json
 )

@@ -56,6 +56,29 @@ typedef struct {
     uint8_t index;           // 目标索引，用于回调函数识别
 } nm_target_t;
 
+// BSP兼容层 - 网络监控适配器接口
+typedef enum {
+    NETWORK_STATUS_UNKNOWN = 0,  // 未知状态
+    NETWORK_STATUS_UP,           // 网络连通
+    NETWORK_STATUS_DOWN,         // 网络断开
+} network_status_t;
+
+typedef struct {
+    char ip[16];            // IP地址字符串
+    char name[32];          // 目标名称
+    network_status_t status;     // 当前状态
+    network_status_t prev_status; // 上一次的状态
+    uint32_t last_response_time; // 最后一次响应时间(ms)
+    uint32_t average_response_time; // 平均响应时间(ms)
+    uint32_t packets_sent;   // 发送的包数
+    uint32_t packets_received; // 收到的包数
+    float loss_rate;         // 丢包率(%)
+    void *ping_handle; // ping会话句柄，类型改为void*以避免包含过多头文件
+    uint8_t index;           // 目标索引，用于回调函数识别
+} network_target_t;
+
+#define NETWORK_TARGET_COUNT 4
+
 // 初始化网络监控
 void nm_init(void);
 
@@ -79,6 +102,12 @@ void nm_print_status_all(void);
 
 // 注册网络状态变化回调
 void nm_register_status_change_callback(nm_status_change_cb_t callback, void* arg);
+
+// BSP兼容接口函数
+const network_target_t* nm_get_network_targets(void);
+void nm_start_network_monitor(void);
+void nm_stop_network_monitor(void);
+void nm_get_network_status(void);
 
 // 获取网络事件组句柄，可用于等待特定网络事件
 EventGroupHandle_t nm_get_event_group(void);
