@@ -5,7 +5,16 @@
 #include "esp_log.h"
 #include <string.h>
 
+// 添加TF卡和动画相关头文件
+#include "bsp_storage.h"
+#include "led_animation_demo.h"
+#include "led_animation_export.h"
+#include "led_animation_loader.h"
+
 static const char *TAG = "LED_MATRIX";
+
+// 前向声明
+static void init_animation_from_storage(void);
 
 // 矩阵LED数据
 static led_strip_handle_t led_strip;
@@ -42,6 +51,9 @@ void led_matrix_init(void) {
     
     // 初始化动画系统
     led_animation_init();
+    
+    // 初始化动画数据（从TF卡加载或使用示例）
+    init_animation_from_storage();
     
     ESP_LOGI(TAG, "LED矩阵初始化完成");
 }
@@ -172,4 +184,44 @@ void led_matrix_test(void) {
     // 清空
     led_matrix_clear();
     ESP_LOGI(TAG, "LED矩阵测试完成");
+}
+
+// 从存储设备初始化动画数据
+static void init_animation_from_storage(void) {
+    ESP_LOGI(TAG, "开始初始化动画数据");
+    
+    // 挂载TF卡
+    esp_err_t mount_ret = bsp_storage_sdcard_mount(MOUNT_POINT);
+    if (mount_ret == ESP_OK) {
+        ESP_LOGI(TAG, "TF卡挂载成功");
+        
+        // 检查是否存在动画文件
+        if (animation_file_exists(ANIMATION_FILE_PATH)) {
+            ESP_LOGI(TAG, "发现动画文件，正在加载...");
+            esp_err_t load_ret = load_animation_from_json(ANIMATION_FILE_PATH);
+            if (load_ret == ESP_OK) {
+                ESP_LOGI(TAG, "从TF卡成功加载动画");
+                return; // 成功加载，直接返回
+            } else {
+                ESP_LOGW(TAG, "动画文件加载失败，使用内置示例动画");
+            }
+        } else {
+            ESP_LOGI(TAG, "未找到动画文件，导出示例动画并使用");
+            // 导出示例动画到TF卡
+            initialize_animation_demo();
+            esp_err_t export_ret = export_animation_to_json(ANIMATION_FILE_PATH);
+            if (export_ret == ESP_OK) {
+                ESP_LOGI(TAG, "成功导出示例动画到TF卡：%s", ANIMATION_FILE_PATH);
+            } else {
+                ESP_LOGW(TAG, "导出示例动画失败");
+            }
+            return; // 已经初始化了示例动画
+        }
+    } else {
+        ESP_LOGW(TAG, "TF卡挂载失败，使用内置示例动画");
+    }
+    
+    // 如果TF卡挂载失败或动画加载失败，使用内置示例动画
+    initialize_animation_demo();
+    ESP_LOGI(TAG, "动画数据初始化完成");
 }

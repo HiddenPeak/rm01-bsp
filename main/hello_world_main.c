@@ -6,7 +6,6 @@
 #include "esp_log.h"
 #include "sdkconfig.h"
 #include "led_matrix.h"
-#include "led_animation_demo.h"
 #include "ping_utils.h"
 
 void app_main(void) {
@@ -34,13 +33,11 @@ void app_main(void) {
     float aux_v = bsp_get_aux_12v_voltage();
     printf("Main Voltage: %.2fV, Aux 12V: %.2fV\n", main_v, aux_v);
     
-    // 初始化LED矩阵
+    // 初始化LED矩阵（包含TF卡挂载和动画加载）
     led_matrix_init();
+    ESP_LOGI("MAIN", "LED矩阵系统初始化完成");
     
-    // 初始化示例动画
-    initialize_animation_demo();
-    ESP_LOGI("MAIN", "示例动画初始化完成");
-      // 查询网络状态
+    // 查询网络状态
     ESP_LOGI("MAIN", "查询网络状态:");
     vTaskDelay(5000 / portTICK_PERIOD_MS); // 等待5秒，让网络监控系统有时间收集数据
     nm_get_network_status();

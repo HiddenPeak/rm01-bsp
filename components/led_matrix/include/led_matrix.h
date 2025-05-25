@@ -13,6 +13,10 @@
 // 灯板GPIO和配置
 #define LED_MATRIX_GPIO_PIN 9
 
+// TF卡挂载点和动画文件路径
+#define MOUNT_POINT "/sdcard"
+#define ANIMATION_FILE_PATH "/sdcard/matrix.json"
+
 // 初始化函数
 void led_matrix_init(void);
 
