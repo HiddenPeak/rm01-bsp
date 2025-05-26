@@ -56,6 +56,15 @@ void bsp_board_init(void);
 void bsp_w5500_init(spi_host_device_t host);
 void bsp_rtl8367_init(void);
 
+// BSP服务初始化（在BSP层自动启动）
+void bsp_init_led_matrix_service(void);
+void bsp_init_network_monitoring_service(void);
+void bsp_init_webserver_service(void);
+
+// BSP服务控制
+void bsp_start_animation_task(void);
+void bsp_stop_animation_task(void);
+
 // 保留旧的网络监控接口（重定向到network_monitor模块）
 void bsp_start_ping_test(void); // 保留旧的接口，重定向到nm_start_network_monitor
 

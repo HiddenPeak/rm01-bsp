@@ -10,49 +10,14 @@
 
 void app_main(void) {
     ESP_LOGI("MAIN", "应用程序启动");
+    
+    // BSP板级初始化（包含硬件初始化、电源管理、网络控制器、LED矩阵、Web服务器、网络监控等）
     bsp_board_init();
-    ESP_LOGI("MAIN", "ESP32-S3 BSP Initialized!");
+    ESP_LOGI("MAIN", "ESP32-S3 BSP初始化完成！");
     
-    // LP N100电源切换
-    bsp_lpn100_power_toggle();
-    ESP_LOGI("MAIN", "LP N100电源切换完成");
-
-    // 板载WS2812测试
-    bsp_ws2812_onboard_test();
-    ESP_LOGI("MAIN", "板载WS2812测试完成");
-    // bsp_ws2812_array_test();
-    // ESP_LOGI("MAIN", "WS2812阵列测试完成");
-    // bsp_ws2812_touch_test();
-    // ESP_LOGI("MAIN", "触摸WS2812测试完成");
-    
-    // 重启交换机
-    // bsp_rtl8367_init();
-    
-    // 读取电压
-    float main_v = bsp_get_main_voltage();
-    float aux_v = bsp_get_aux_12v_voltage();
-    printf("Main Voltage: %.2fV, Aux 12V: %.2fV\n", main_v, aux_v);
-    
-    // 初始化LED矩阵（包含TF卡挂载和动画加载）
-    led_matrix_init();
-    ESP_LOGI("MAIN", "LED矩阵系统初始化完成");
-    
-    // 查询网络状态
-    ESP_LOGI("MAIN", "查询网络状态:");
-    vTaskDelay(5000 / portTICK_PERIOD_MS); // 等待5秒，让网络监控系统有时间收集数据
-    nm_get_network_status();
-    
-    // 启动Web服务器
-    esp_err_t ret = bsp_start_webserver();
-    if (ret != ESP_OK) {
-        ESP_LOGE("MAIN", "Web服务器启动失败: %s", esp_err_to_name(ret));
-    } else {
-        ESP_LOGI("MAIN", "Web服务器已启动，请使用浏览器访问 http://10.10.99.97/");
-    }
-    
+    // 应用主循环
+    ESP_LOGI("MAIN", "进入应用主循环");
     while (1) {
-        // 更新矩阵动画
-        led_matrix_update_animation();
-        vTaskDelay(30 / portTICK_PERIOD_MS); // 约33FPS
+        vTaskDelay(1000 / portTICK_PERIOD_MS); // 每秒休眠，保持系统运行
     }
 }

@@ -12,17 +12,16 @@ extern "C" {
  */
 #define BSP_WS2812_ONBOARD_PIN      42
 #define BSP_WS2812_ONBOARD_COUNT    28
-#define BSP_WS2812_ARRAY_PIN        9
-#define BSP_WS2812_ARRAY_COUNT      1024  // 32x32
 #define BSP_WS2812_Touch_LED_PIN    45
 #define BSP_WS2812_Touch_LED_COUNT  1
+
+// 注意：GPIO 9 的LED矩阵由led_matrix模块独立管理，不在此处定义
 
 /**
  * @brief WS2812 LED句柄类型定义
  */
 typedef enum {
     BSP_WS2812_ONBOARD = 0,    ///< 板载LED
-    BSP_WS2812_ARRAY,          ///< LED阵列
     BSP_WS2812_TOUCH,          ///< 触摸LED
     BSP_WS2812_MAX             ///< 最大值，用于数组大小
 } bsp_ws2812_type_t;
@@ -114,11 +113,6 @@ led_strip_handle_t bsp_ws2812_get_handle(bsp_ws2812_type_t type);
  * @brief 板载LED测试函数
  */
 void bsp_ws2812_onboard_test(void);
-
-/**
- * @brief LED阵列测试函数
- */
-void bsp_ws2812_array_test(void);
 
 /**
  * @brief 触摸LED测试函数

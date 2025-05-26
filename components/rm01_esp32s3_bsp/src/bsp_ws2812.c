@@ -16,7 +16,6 @@ typedef struct {
 
 static const ws2812_config_t ws2812_configs[BSP_WS2812_MAX] = {
     [BSP_WS2812_ONBOARD] = {BSP_WS2812_ONBOARD_PIN, BSP_WS2812_ONBOARD_COUNT},
-    [BSP_WS2812_ARRAY]   = {BSP_WS2812_ARRAY_PIN, BSP_WS2812_ARRAY_COUNT},
     [BSP_WS2812_TOUCH]   = {BSP_WS2812_Touch_LED_PIN, BSP_WS2812_Touch_LED_COUNT},
 };
 
@@ -190,27 +189,6 @@ void bsp_ws2812_onboard_test(void)
     bsp_ws2812_refresh(BSP_WS2812_ONBOARD);
     
     ESP_LOGI(TAG, "Onboard WS2812 test completed");
-}
-
-void bsp_ws2812_array_test(void)
-{
-    if (ws2812_handles[BSP_WS2812_ARRAY] == NULL) {
-        ESP_LOGE(TAG, "Array WS2812 not initialized");
-        return;
-    }
-
-    ESP_LOGI(TAG, "Starting array WS2812 test");
-    
-    for (int i = 0; i < BSP_WS2812_ARRAY_COUNT; i++) {
-        bsp_ws2812_set_pixel(BSP_WS2812_ARRAY, i, 64, 64, 64); // 白色
-        bsp_ws2812_refresh(BSP_WS2812_ARRAY);
-        vTaskDelay(1 / portTICK_PERIOD_MS);
-    }
-    
-    bsp_ws2812_clear(BSP_WS2812_ARRAY);
-    bsp_ws2812_refresh(BSP_WS2812_ARRAY);
-    
-    ESP_LOGI(TAG, "Array WS2812 test completed");
 }
 
 void bsp_ws2812_touch_test(void)

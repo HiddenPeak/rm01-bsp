@@ -11,7 +11,7 @@
 #define LED_MATRIX_NUM_LEDS (LED_MATRIX_WIDTH * LED_MATRIX_HEIGHT)
 
 // 灯板GPIO和配置
-#define LED_MATRIX_GPIO_PIN 9
+#define LED_MATRIX_GPIO_PIN 9  // 恢复到原始GPIO 9，冲突已解决
 
 // TF卡挂载点和动画文件路径
 #define MOUNT_POINT "/sdcard"

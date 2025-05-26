@@ -13,5 +13,4 @@ idf_component_register(
         "led_strip"
         "rm01_esp32s3_bsp"
         "json"
-        "json"
 )
