@@ -5,6 +5,7 @@
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
 #include "driver/gpio.h"
+#include "driver/uart.h"
 #include "esp_err.h"
 
 #ifdef __cplusplus
@@ -13,7 +14,7 @@ extern "C" {
 
 // 电源管理引脚定义
 #define BSP_ORIN_RESET_PIN       39
-#define BSP_ORIN_POWER_PIN       40
+#define BSP_ORIN_POWER_PIN       3
 #define BSP_LPN100_RESET_PIN     38
 #define BSP_LPN100_POWER_PIN     46
 
@@ -21,8 +22,24 @@ extern "C" {
 #define BSP_MAIN_VOLTAGE_PIN     18  // GPIO18 -> ADC2_CHANNEL_7
 #define BSP_AUX_12V_PIN          8   // GPIO8  -> ADC1_CHANNEL_7
 
+// 电源芯片UART通信引脚定义
+#define BSP_POWER_UART_PORT      UART_NUM_1
+#define BSP_POWER_UART_TX_PIN    -1              // 不需要发送，设为-1
+#define BSP_POWER_UART_RX_PIN    47              // GPIO47接收电源信息
+#define BSP_POWER_UART_BAUDRATE  9600            // 波特率，根据电源芯片规格调整
+
 // 分压比配置
 #define VOLTAGE_RATIO  11.0  // 100K:10K分压
+
+// 电源芯片数据结构
+typedef struct {
+    float voltage;          // 电压值 (V)
+    float current;          // 电流值 (A)
+    float power;           // 功率值 (W)
+    float temperature;     // 温度值 (°C)
+    uint32_t timestamp;    // 时间戳
+    bool valid;            // 数据有效性
+} bsp_power_chip_data_t;
 
 // ADC全局句柄声明
 extern adc_oneshot_unit_handle_t adc1_handle;  // ADC1 for GPIO8
@@ -51,6 +68,16 @@ void bsp_lpn100_init(void);
 void bsp_voltage_init(void);
 
 /**
+ * @brief 初始化电源芯片UART通信
+ */
+void bsp_power_chip_uart_init(void);
+
+/**
+ * @brief 停止电源芯片监控任务
+ */
+void bsp_power_chip_monitor_stop(void);
+
+/**
  * @brief 读取主电源电压
  * @return 电压值(V)，失败返回0.0
  */
@@ -61,6 +88,19 @@ float bsp_get_main_voltage(void);
  * @return 电压值(V)，失败返回0.0
  */
 float bsp_get_aux_12v_voltage(void);
+
+/**
+ * @brief 读取电源芯片数据
+ * @param data 电源芯片数据结构指针
+ * @return ESP_OK成功，其他值失败
+ */
+esp_err_t bsp_get_power_chip_data(bsp_power_chip_data_t *data);
+
+/**
+ * @brief 获取电源芯片最新数据
+ * @return 电源芯片数据结构指针，如果无效数据返回NULL
+ */
+const bsp_power_chip_data_t* bsp_get_latest_power_chip_data(void);
 
 /**
  * @brief LPN100电源按钮控制

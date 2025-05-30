@@ -113,9 +113,12 @@ void bsp_board_init(void) {
     
     // 初始化电源管理模块
     bsp_power_init();
-    
-    // 初始化板载WS2812
+      // 初始化板载WS2812
     bsp_ws2812_init(BSP_WS2812_ONBOARD);
+    
+    // 初始化触摸WS2812
+    bsp_ws2812_init(BSP_WS2812_TOUCH);
+    
     // 注意：GPIO 9 的LED矩阵由led_matrix模块独立管理
     
     // 初始化网络控制器
@@ -125,6 +128,8 @@ void bsp_board_init(void) {
     // LPN100电源控制操作
     bsp_lpn100_power_toggle();
     ESP_LOGI(TAG, "LPN100电源控制完成");
+
+    bsp_orin_power_control(false); // 开启ORIN电源
     
     // 读取并报告电压状态
     float main_v = bsp_get_main_voltage();
@@ -152,8 +157,8 @@ void bsp_board_init(void) {
     // 板载WS2812测试 - 可选
     // bsp_ws2812_onboard_test();
     // ESP_LOGI("MAIN", "板载WS2812测试完成");
-    // bsp_ws2812_touch_test();
-    // ESP_LOGI("MAIN", "触摸WS2812测试完成");
+    bsp_ws2812_touch_test();
+    ESP_LOGI("MAIN", "触摸WS2812测试完成");
     
     ESP_LOGI(TAG, "ESP32-S3 BSP及所有服务初始化完成");
 }

@@ -201,11 +201,30 @@ void bsp_ws2812_touch_test(void)
     ESP_LOGI(TAG, "Starting touch WS2812 test");
     
     // 测试触摸传感器上的ws2812灯珠
-    for (int i = 0; i < BSP_WS2812_Touch_LED_COUNT; i++) {
-        bsp_ws2812_set_pixel(BSP_WS2812_TOUCH, i, 0, 0, 255); // 蓝色
+    // 创建白色呼吸灯效果，持续2500ms
+    uint8_t brightness = 0;
+    bool increasing = true;
+    uint32_t start_time = xTaskGetTickCount();
+    uint32_t duration_ticks = pdMS_TO_TICKS(1000);
+    
+    while ((xTaskGetTickCount() - start_time) < duration_ticks) {
+        // 设置所有LED为当前亮度的白色
+        for (int i = 0; i < BSP_WS2812_Touch_LED_COUNT; i++) {
+            bsp_ws2812_set_pixel(BSP_WS2812_TOUCH, i, brightness, brightness, brightness);
+        }
+        bsp_ws2812_refresh(BSP_WS2812_TOUCH);
+        
+        // 更新亮度
+        if (increasing) {
+            brightness += 5;
+            if (brightness >= 250) increasing = false;
+        } else {
+            brightness -= 5;
+            if (brightness <= 5) increasing = true;
+        }
+        
+        vTaskDelay(20 / portTICK_PERIOD_MS); // 控制呼吸速度
     }
-    bsp_ws2812_refresh(BSP_WS2812_TOUCH);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
     
     bsp_ws2812_clear(BSP_WS2812_TOUCH);
     bsp_ws2812_refresh(BSP_WS2812_TOUCH);
