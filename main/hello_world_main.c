@@ -8,6 +8,7 @@
 #include "led_matrix.h"
 #include "ping_utils.h"
 #include "power_chip_test.h"
+#include "network_animation_controller.h"
 
 void app_main(void) {
     ESP_LOGI("MAIN", "应用程序启动");
@@ -16,24 +17,48 @@ void app_main(void) {
     bsp_board_init();
     ESP_LOGI("MAIN", "ESP32-S3 BSP初始化完成！");
     
+    // 初始化网络动画控制器
+    ESP_LOGI("MAIN", "初始化网络动画控制器");
+    network_animation_controller_init();
+    
+    // 设置启动动画，等待网络监控系统启动
+    network_animation_set_startup();
+    ESP_LOGI("MAIN", "已设置启动动画，等待网络监控系统启动");
+    
     // 启动电源芯片UART通信测试
     start_power_chip_test();
     
-    // 等待一段时间后显示电源系统状态
-    vTaskDelay(pdMS_TO_TICKS(3000));
+    // 等待网络监控系统收集初始数据
+    ESP_LOGI("MAIN", "等待网络监控系统收集初始数据...");
+    vTaskDelay(pdMS_TO_TICKS(8000)); // 等待8秒让网络监控系统完成初始化
+    
+    // 开始网络状态与动画联动监控
+    ESP_LOGI("MAIN", "开始网络状态与动画联动监控");
+    network_animation_start_monitoring();
+    
+    // 显示电源系统状态
     show_power_system_status();
     
     // 应用主循环
     ESP_LOGI("MAIN", "进入应用主循环");
     int loop_count = 0;
+    int status_report_count = 0;
     while (1) {
         vTaskDelay(1000 / portTICK_PERIOD_MS); // 每秒休眠，保持系统运行
         
-        // 每30秒显示一次电源系统状态
         loop_count++;
+        status_report_count++;
+        
+        // 每30秒显示一次电源系统状态
         if (loop_count >= 30) {
             show_power_system_status();
             loop_count = 0;
+        }
+        
+        // 每60秒显示一次网络动画控制器状态
+        if (status_report_count >= 60) {
+            network_animation_print_status();
+            status_report_count = 0;
         }
     }
 }
