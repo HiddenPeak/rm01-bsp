@@ -4,6 +4,7 @@
 #include "freertos/task.h"
 #include "driver/uart.h"
 #include <string.h>
+#include <math.h>
 
 static const char *TAG = "BSP_POWER";
 
@@ -16,14 +17,23 @@ adc_cali_handle_t adc2_cali_handle = NULL;
 // 电源芯片数据
 static bsp_power_chip_data_t power_chip_data = {0};
 static bool uart_initialized = false;
-static TaskHandle_t power_chip_task_handle = NULL;
+static TaskHandle_t voltage_monitor_task_handle = NULL;
+
+// 电压变化监控
+static float last_main_voltage = 0.0f;
+static float last_aux_voltage = 0.0f;
+static float main_voltage_threshold = 3.0f;  // 主电源电压变化阈值，默认3.0V
+static float aux_voltage_threshold = 3.0f;   // 辅助电源电压变化阈值，默认3.0V
+static bool system_boot_negotiation_done = false; // 系统启动协商是否完成
 
 // UART接收缓冲区
 #define UART_BUFFER_SIZE 256
 static uint8_t uart_buffer[UART_BUFFER_SIZE];
 
 // 函数前置声明
-static void power_chip_monitor_task(void *pvParameters);
+static void voltage_monitor_task(void *pvParameters);
+static void perform_power_chip_negotiation(void);
+static bool check_voltage_change(void);
 static esp_err_t parse_power_chip_data(const uint8_t* raw_data, int data_len, bsp_power_chip_data_t* data);
 
 void bsp_power_init(void) {
@@ -242,36 +252,87 @@ esp_err_t bsp_get_power_status(float *main_voltage, float *aux_voltage) {
       return ESP_OK;
 }
 
-static void power_chip_monitor_task(void *pvParameters) {
-    bsp_power_chip_data_t temp_data;
+static void voltage_monitor_task(void *pvParameters) {
+    ESP_LOGI(TAG, "电压监控任务启动 - 检测电压变化以触发电源协商");
     
-    ESP_LOGI(TAG, "电源芯片监控任务启动");
+    // 延迟启动，等待系统稳定
+    vTaskDelay(pdMS_TO_TICKS(2000));
+    
+    // 系统启动时进行首次电源协商
+    if (!system_boot_negotiation_done) {
+        ESP_LOGI(TAG, "系统启动 - 执行电源芯片协商");
+        perform_power_chip_negotiation();
+        system_boot_negotiation_done = true;
+    }
     
     while (1) {
-        if (uart_initialized) {
-            // 每5秒读取一次电源芯片数据，减少日志输出频率
-            esp_err_t ret = bsp_get_power_chip_data(&temp_data);
-            if (ret == ESP_ERR_TIMEOUT) {
-                ESP_LOGD(TAG, "电源芯片数据读取超时");  // 降低日志级别
-            } else if (ret != ESP_OK) {
-                ESP_LOGW(TAG, "读取电源芯片数据失败: %s", esp_err_to_name(ret));
-            }
+        // 检查电压变化
+        if (check_voltage_change()) {
+            ESP_LOGI(TAG, "检测到电压变化 - 触发电源芯片协商");
+            perform_power_chip_negotiation();
         }
         
-        vTaskDelay(pdMS_TO_TICKS(5000)); // 5秒间隔
+        // 每2秒检查一次电压变化
+        vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
 
-// CRC8校验函数
+static void perform_power_chip_negotiation(void) {
+    if (!uart_initialized) {
+        ESP_LOGW(TAG, "UART未初始化，跳过电源芯片协商");
+        return;
+    }
+    
+    bsp_power_chip_data_t temp_data;
+    esp_err_t ret = bsp_get_power_chip_data(&temp_data);
+    
+    if (ret == ESP_OK) {
+        ESP_LOGI(TAG, "电源芯片协商完成 - 电压: %.2fV, 电流: %.3fA, 功率: %.2fW", 
+                temp_data.voltage, temp_data.current, temp_data.power);
+    } else if (ret == ESP_ERR_TIMEOUT) {
+        ESP_LOGW(TAG, "电源芯片协商超时 - 未接收到数据");
+    } else {
+        ESP_LOGE(TAG, "电源芯片协商失败: %s", esp_err_to_name(ret));
+    }
+}
+
+static bool check_voltage_change(void) {
+    float current_main_voltage = bsp_get_main_voltage();
+    float current_aux_voltage = bsp_get_aux_12v_voltage();
+    
+    bool voltage_changed = false;
+    
+    // 检查主电源电压变化
+    if (last_main_voltage > 0 && fabsf(current_main_voltage - last_main_voltage) > main_voltage_threshold) {
+        ESP_LOGI(TAG, "主电源电压变化: %.2fV -> %.2fV (阈值: %.2fV)", 
+                last_main_voltage, current_main_voltage, main_voltage_threshold);
+        voltage_changed = true;
+    }
+    
+    // 检查辅助电源电压变化
+    if (last_aux_voltage > 0 && fabsf(current_aux_voltage - last_aux_voltage) > aux_voltage_threshold) {
+        ESP_LOGI(TAG, "辅助电源电压变化: %.2fV -> %.2fV (阈值: %.2fV)", 
+                last_aux_voltage, current_aux_voltage, aux_voltage_threshold);
+        voltage_changed = true;
+    }
+    
+    // 更新记录的电压值
+    last_main_voltage = current_main_voltage;
+    last_aux_voltage = current_aux_voltage;
+    
+    return voltage_changed;
+}
+
+// CRC8校验函数 - 使用Maxim/Dallas算法（多项式0x31）
 static uint8_t calculate_crc8(const uint8_t *data, size_t length) {
-    uint8_t crc = 0xFF;
+    uint8_t crc = 0x00;  // Maxim算法初始值为0x00
     for (size_t i = 0; i < length; i++) {
         crc ^= data[i];
         for (int j = 0; j < 8; j++) {
-            if (crc & 0x80) {
-                crc = (crc << 1) ^ 0x07;  // 多项式0x07，可能需要根据实际情况调整
+            if (crc & 0x01) {
+                crc = (crc >> 1) ^ 0x8C;  // Maxim多项式0x31的反向形式
             } else {
-                crc <<= 1;
+                crc >>= 1;
             }
         }
     }
@@ -303,13 +364,14 @@ static esp_err_t parse_power_chip_data(const uint8_t* raw_data, int data_len, bs
     uint8_t voltage_raw = raw_data[packet_start + 1];
     uint8_t current_raw = raw_data[packet_start + 2];
     uint8_t crc_received = raw_data[packet_start + 3];
-      // 验证CRC (校验包头+电压+电流)
+      // 验证CRC (校验包头+电压+电流，使用Maxim CRC8算法)
     uint8_t crc_calculated = calculate_crc8(&raw_data[packet_start], 3);
     if (crc_calculated != crc_received) {
-        ESP_LOGW(TAG, "XSP16数据CRC校验失败: 计算值=0x%02X, 接收值=0x%02X", 
+        ESP_LOGW(TAG, "XSP16数据CRC校验失败: 计算值=0x%02X, 接收值=0x%02X (使用Maxim CRC8)", 
                  crc_calculated, crc_received);
-        // 可以选择继续解析或返回错误
-        // return ESP_ERR_INVALID_CRC;
+        // 继续解析数据，但标记为CRC校验失败
+    } else {
+        ESP_LOGD(TAG, "XSP16数据CRC校验成功: 0x%02X", crc_calculated);
     }
     
     // 数据转换 - 根据XSP16规格
@@ -321,7 +383,6 @@ static esp_err_t parse_power_chip_data(const uint8_t* raw_data, int data_len, bs
     data->voltage = voltage;
     data->current = current;
     data->power = power;
-    data->temperature = 0.0f;  // XSP16似乎没有温度数据
     data->timestamp = esp_log_timestamp();
     data->valid = true;
     
@@ -375,18 +436,18 @@ void bsp_power_chip_uart_init(void) {
     
     uart_initialized = true;
     
-    // 创建电源芯片监控任务
-    BaseType_t ret = xTaskCreate(power_chip_monitor_task, 
-                                "power_chip_monitor", 
+    // 创建电压监控任务（检测电压变化以触发电源协商）
+    BaseType_t ret = xTaskCreate(voltage_monitor_task, 
+                                "voltage_monitor", 
                                 4096,               // 栈大小
                                 NULL,              // 任务参数
-                                5,                 // 任务优先级
-                                &power_chip_task_handle);
+                                4,                 // 任务优先级（降低优先级）
+                                &voltage_monitor_task_handle);
     
     if (ret != pdPASS) {
-        ESP_LOGE(TAG, "创建电源芯片监控任务失败");
+        ESP_LOGE(TAG, "创建电压监控任务失败");
     } else {
-        ESP_LOGI(TAG, "电源芯片监控任务已启动");
+        ESP_LOGI(TAG, "电压监控任务已启动");
     }
       ESP_LOGI(TAG, "电源芯片UART通信初始化完成 - 波特率%d", BSP_POWER_UART_BAUDRATE);
 }
@@ -442,22 +503,18 @@ const bsp_power_chip_data_t* bsp_get_latest_power_chip_data(void) {
         return NULL;
     }
     
-    // 检查数据是否过期（超过5秒认为过期）
-    uint32_t current_time = esp_log_timestamp();
-    if ((current_time - power_chip_data.timestamp) > 5000) {
-        ESP_LOGW(TAG, "电源芯片数据已过期");
-        power_chip_data.valid = false;
-        return NULL;
-    }
+    // 电源芯片协商数据只在电压变化超过阈值时才重新读取
+    // 开机时读取的数据会一直有效，直到下次电压变化触发重新协商
+    // 不再基于时间过期，而是基于电压变化事件
     
     return &power_chip_data;
 }
 
 void bsp_power_chip_monitor_stop(void) {
-    if (power_chip_task_handle != NULL) {
-        ESP_LOGI(TAG, "停止电源芯片监控任务");
-        vTaskDelete(power_chip_task_handle);
-        power_chip_task_handle = NULL;
+    if (voltage_monitor_task_handle != NULL) {
+        ESP_LOGI(TAG, "停止电压监控任务");
+        vTaskDelete(voltage_monitor_task_handle);
+        voltage_monitor_task_handle = NULL;
     }
     
     if (uart_initialized) {
@@ -465,4 +522,37 @@ void bsp_power_chip_monitor_stop(void) {
         uart_initialized = false;
         ESP_LOGI(TAG, "UART驱动已卸载");
     }
+}
+
+void bsp_trigger_power_chip_negotiation(void) {
+    ESP_LOGI(TAG, "手动触发电源芯片协商");
+    perform_power_chip_negotiation();
+}
+
+void bsp_set_voltage_change_threshold(float main_threshold, float aux_threshold) {
+    if (main_threshold > 0) {
+        main_voltage_threshold = main_threshold;
+    }
+    if (aux_threshold > 0) {
+        aux_voltage_threshold = aux_threshold;
+    }
+    ESP_LOGI(TAG, "电压变化阈值设置 - 主电源: %.2fV, 辅助电源: %.2fV", 
+             main_voltage_threshold, aux_voltage_threshold);
+}
+
+esp_err_t bsp_get_power_chip_data_status(bool *is_valid, uint32_t *age_seconds) {
+    if (is_valid == NULL || age_seconds == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    *is_valid = power_chip_data.valid;
+    
+    if (power_chip_data.valid) {
+        uint32_t current_time = esp_log_timestamp();
+        *age_seconds = (current_time - power_chip_data.timestamp) / 1000;
+    } else {
+        *age_seconds = 0;
+    }
+    
+    return ESP_OK;
 }

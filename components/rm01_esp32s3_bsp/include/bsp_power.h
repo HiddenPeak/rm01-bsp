@@ -36,8 +36,7 @@ typedef struct {
     float voltage;          // 电压值 (V)
     float current;          // 电流值 (A)
     float power;           // 功率值 (W)
-    float temperature;     // 温度值 (°C)
-    uint32_t timestamp;    // 时间戳
+    uint32_t timestamp;    // 协商发生时的系统运行时间 (毫秒，基于esp_log_timestamp())
     bool valid;            // 数据有效性
 } bsp_power_chip_data_t;
 
@@ -78,6 +77,27 @@ void bsp_power_chip_uart_init(void);
 void bsp_power_chip_monitor_stop(void);
 
 /**
+ * @brief 触发电源芯片协商读取
+ * @note 在上电或检测到电压变化时调用，读取电源芯片协商信息
+ */
+void bsp_trigger_power_chip_negotiation(void);
+
+/**
+ * @brief 设置电压变化监控阈值
+ * @param main_threshold 主电源电压变化阈值(V)，默认3.0V
+ * @param aux_threshold 辅助电源电压变化阈值(V)，默认3.0V
+ */
+void bsp_set_voltage_change_threshold(float main_threshold, float aux_threshold);
+
+/**
+ * @brief 获取电源芯片协商数据状态信息
+ * @param is_valid 数据是否有效的指针
+ * @param age_seconds 数据年龄（秒）的指针
+ * @return ESP_OK成功，其他值失败
+ */
+esp_err_t bsp_get_power_chip_data_status(bool *is_valid, uint32_t *age_seconds);
+
+/**
  * @brief 读取主电源电压
  * @return 电压值(V)，失败返回0.0
  */
@@ -97,8 +117,9 @@ float bsp_get_aux_12v_voltage(void);
 esp_err_t bsp_get_power_chip_data(bsp_power_chip_data_t *data);
 
 /**
- * @brief 获取电源芯片最新数据
- * @return 电源芯片数据结构指针，如果无效数据返回NULL
+ * @brief 获取电源芯片最新协商数据
+ * @note 数据只在电压变化超过阈值时重新协商，开机后的数据会一直有效直到下次电压变化
+ * @return 电源芯片数据结构指针，如果无协商数据返回NULL
  */
 const bsp_power_chip_data_t* bsp_get_latest_power_chip_data(void);
 

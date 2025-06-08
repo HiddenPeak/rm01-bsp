@@ -1,6 +1,6 @@
 /**
  * @file power_chip_test.h
- * @brief 电源芯片UART通信测试头文件
+ * @brief 电源芯片UART协商通信测试头文件
  */
 
 #ifndef POWER_CHIP_TEST_H
@@ -12,7 +12,7 @@ extern "C" {
 
 /**
  * @brief 启动电源芯片测试
- * 调用此函数来启动电源芯片数据读取测试
+ * 调用此函数来启动基于电压变化触发的电源芯片协商测试
  */
 void start_power_chip_test(void);
 

@@ -218,12 +218,9 @@ esp_err_t system_state_get_info(system_state_info_t* info) {
     bool application_connected = (nm_get_status(NM_APPLICATION_MODULE_IP) == NM_STATUS_UP);
     bool user_host_connected = (nm_get_status(NM_USER_HOST_IP) == NM_STATUS_UP);
     
-    // 获取温度
+    // 获取温度（XSP16芯片不提供温度数据，设置为0）
     float temperature = 0.0f;
-    const bsp_power_chip_data_t* power_data = bsp_get_latest_power_chip_data();
-    if (power_data != NULL) {
-        temperature = power_data->temperature;
-    }
+    // 注意：XSP16电源芯片不提供温度数据，未来可能需要从其他温度传感器获取
     
     // 填充信息结构
     if (xSemaphoreTake(s_controller.state_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
@@ -291,12 +288,9 @@ static system_state_t determine_system_state(void) {
     //    - 考虑不同组件的温度权重
     // ================================================
     
-    // 获取本地电源芯片温度 (已实现)
+    // 获取本地电源芯片温度 (XSP16芯片不提供温度数据)
     float local_temperature = 0.0f;
-    const bsp_power_chip_data_t* power_data = bsp_get_latest_power_chip_data();
-    if (power_data != NULL && power_data->valid) {
-        local_temperature = power_data->temperature;
-    }
+    // 注意：XSP16电源芯片不提供温度数据，未来可能需要从其他温度传感器获取
     
     // TODO: 等待网络模组API启用后，添加以下功能：
     // - 从算力模组读取温度 (computing_temp)
@@ -420,7 +414,7 @@ static bool is_high_compute_load(void) {
     //    - 活跃任务数 > 阈值
     // ================================================
     
-    // 当前临时实现：仅基于功耗判断
+    // 当前临时实现：仅基于功耗判断（通过电源协商数据）
     const bsp_power_chip_data_t* power_data = bsp_get_latest_power_chip_data();
     if (power_data != NULL && power_data->valid) {
         // 如果功耗超过一定阈值（例如50W），认为是高负荷状态
