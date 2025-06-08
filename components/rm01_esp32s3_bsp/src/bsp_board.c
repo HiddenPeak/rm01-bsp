@@ -125,11 +125,11 @@ void bsp_board_init(void) {
     bsp_w5500_init(SPI3_HOST);
     // bsp_rtl8367_init(); // 如需要可启用
     
-    // LPN100电源控制操作
-    bsp_lpn100_power_toggle();
+    // LPN100电源控制操作（当前模块会自动上电启动，所以不需要进行电源操作。）
+    // bsp_lpn100_power_toggle();
     ESP_LOGI(TAG, "LPN100电源控制完成");
 
-    bsp_orin_power_control(false); // 开启ORIN电源
+    // bsp_orin_power_control(false); // 开启ORIN电源
     
     // 读取并报告电压状态
     float main_v = bsp_get_main_voltage();
@@ -139,11 +139,11 @@ void bsp_board_init(void) {
     // ============ BSP服务层初始化 ============
     ESP_LOGI(TAG, "初始化BSP服务层");
     
-    // 先初始化网络监控服务
-    bsp_init_network_monitoring_service();
-    
     // 初始化Web服务器服务
     bsp_init_webserver_service();
+
+    // 初始化网络监控服务
+    bsp_init_network_monitoring_service();
     
     // 延迟初始化LED矩阵服务，确保其他RMT设备完成初始化
     ESP_LOGI(TAG, "等待其他模块稳定后初始化LED矩阵...");

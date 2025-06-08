@@ -80,14 +80,16 @@ void bsp_lpn100_init(void) {
     
     gpio_set_level(BSP_LPN100_RESET_PIN, 1);
     
-    // 确保PWR_BTN引脚(GPIO46)为高电平，避免不小心触发BIOS清除
-    // 该引脚连接到LPN100的PWR_BTN，拉低超过5秒会清空BIOS
-    // 拉低100ms启动
-    gpio_set_level(BSP_LPN100_POWER_PIN, 0); // 按下电源按钮
-    vTaskDelay(100 / portTICK_PERIOD_MS); // 100ms
-    gpio_set_level(BSP_LPN100_POWER_PIN, 1); // 默认高电平
+    // NPN逻辑：高电平=按下，低电平=松开
+    // 初始化时先确保松开按钮，然后按下启动N100
+    gpio_set_level(BSP_LPN100_POWER_PIN, 0); // 先松开按钮
+    vTaskDelay(100 / portTICK_PERIOD_MS); // 等待100ms确保稳定
     
-    ESP_LOGI(TAG, "LPN100 PWR_BTN引脚初始化为高电平，避免清空BIOS");
+    gpio_set_level(BSP_LPN100_POWER_PIN, 1); // 按下电源按钮启动N100
+    vTaskDelay(500 / portTICK_PERIOD_MS); // 按下500ms确保启动
+    gpio_set_level(BSP_LPN100_POWER_PIN, 0); // 松开按钮
+    
+    ESP_LOGI(TAG, "LPN100电源按钮操作完成：按下500ms后松开，N100应该开始启动");
 }
 
 void bsp_voltage_init(void) {
@@ -213,12 +215,16 @@ float bsp_get_aux_12v_voltage(void) {
 }
 
 void bsp_lpn100_power_toggle(void) {
+    // NPN逻辑：高电平=按下，低电平=松开
     // 按下电源按钮不超过300毫秒，足够触发电源操作但不会清空BIOS
     // LPN100的PWR_BTN按下超过5秒会清空BIOS
-    ESP_LOGI(TAG, "LPN100电源按钮按下，时间控制在300ms以内，避免清空BIOS");
-    gpio_set_level(BSP_LPN100_POWER_PIN, 1);
+    ESP_LOGI(TAG, "LPN100电源按钮切换：按下300ms后松开");
+    
+    gpio_set_level(BSP_LPN100_POWER_PIN, 1); // 按下按钮
     vTaskDelay(300 / portTICK_PERIOD_MS); // 300ms，安全时间
-    gpio_set_level(BSP_LPN100_POWER_PIN, 0);
+    gpio_set_level(BSP_LPN100_POWER_PIN, 0); // 松开按钮
+    
+    ESP_LOGI(TAG, "LPN100电源按钮操作完成");
 }
 
 void bsp_orin_reset(void) {

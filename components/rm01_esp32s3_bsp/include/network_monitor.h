@@ -44,6 +44,7 @@ typedef enum {
 // 网络监控目标结构体
 typedef struct {
     char ip[16];            // IP地址字符串
+    char name[32];          // 目标名称
     ip_addr_t addr;         // IP地址结构
     nm_status_t status;     // 当前状态
     nm_status_t prev_status; // 上一次的状态
@@ -103,6 +104,29 @@ void nm_print_status_all(void);
 // 注册网络状态变化回调
 void nm_register_status_change_callback(nm_status_change_cb_t callback, void* arg);
 
+// 高实时性监控接口
+void nm_enable_fast_monitoring(bool enable);  // 启用/禁用快速监控模式
+void nm_set_monitoring_interval(uint32_t interval_ms);  // 设置监控间隔
+bool nm_is_fast_mode_enabled(void);  // 检查是否启用快速模式
+
+// 自适应监控接口
+void nm_enable_adaptive_monitoring(bool enable);  // 启用/禁用自适应监控
+void nm_enable_network_quality_monitoring(bool enable);  // 启用/禁用网络质量监控
+bool nm_is_adaptive_mode_enabled(void);  // 检查是否启用自适应监控
+
+// 性能统计接口
+typedef struct {
+    uint32_t total_pings;
+    uint32_t successful_pings; 
+    uint32_t failed_pings;
+    uint32_t avg_response_time;
+    uint32_t monitoring_cycles;
+    uint32_t state_changes;
+} nm_performance_stats_t;
+
+void nm_get_performance_stats(nm_performance_stats_t* stats);  // 获取性能统计
+void nm_reset_performance_stats(void);  // 重置性能统计
+
 // BSP兼容接口函数
 const network_target_t* nm_get_network_targets(void);
 void nm_start_network_monitor(void);
@@ -111,5 +135,37 @@ void nm_get_network_status(void);
 
 // 获取网络事件组句柄，可用于等待特定网络事件
 EventGroupHandle_t nm_get_event_group(void);
+
+// 并发监控优化接口
+void nm_enable_concurrent_monitoring(bool enable);  // 启用/禁用并发监控模式
+bool nm_is_concurrent_mode_enabled(void);          // 检查是否启用并发模式
+
+// 无锁状态查询接口（高性能）
+nm_status_t nm_get_status_lockfree(const char* ip);
+const nm_target_t* nm_get_targets_readonly(void);  // 只读访问，避免拷贝
+
+// 高级监控配置
+typedef struct {
+    uint32_t ping_timeout_ms;           // ping超时时间
+    uint32_t max_concurrent_pings;      // 最大并发ping数
+    uint32_t result_queue_size;         // 结果队列大小
+    bool enable_prediction;             // 启用预测性监控
+    bool enable_smart_scheduling;       // 启用智能调度
+} nm_advanced_config_t;
+
+void nm_set_advanced_config(const nm_advanced_config_t* config);
+void nm_get_advanced_config(nm_advanced_config_t* config);
+
+// 性能监控接口
+typedef struct {
+    uint32_t avg_ping_time;             // 平均ping时间
+    uint32_t lock_contention_count;     // 锁竞争次数
+    uint32_t queue_overflow_count;      // 队列溢出次数
+    uint32_t concurrent_ping_count;     // 当前并发ping数
+    uint32_t prediction_accuracy;       // 预测准确率(%)
+} nm_performance_metrics_t;
+
+void nm_get_performance_metrics(nm_performance_metrics_t* metrics);
+void nm_reset_performance_metrics(void);
 
 #endif // NETWORK_MONITOR_H
