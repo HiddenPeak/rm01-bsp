@@ -1,53 +1,136 @@
-| Supported Targets | ESP32 | ESP32-C2 | ESP32-C3 | ESP32-C5 | ESP32-C6 | ESP32-C61 | ESP32-H2 | ESP32-P4 | ESP32-S2 | ESP32-S3 | Linux |
-| ----------------- | ----- | -------- | -------- | -------- | -------- | --------- | -------- | -------- | -------- | -------- | ----- |
+# RM01-BSP - 智能LED矩阵控制系统
 
-# Hello World Example
+基于ESP32-S3的高性能LED矩阵控制器，集成网络监控、电源管理和动画控制功能。
 
-Starts a FreeRTOS task to print "Hello World".
+## 🎯 项目概述
 
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
+RM01-BSP是一个先进的嵌入式控制系统，主要功能包括：
+- **智能LED矩阵控制** - 支持32x32像素矩阵的实时动画显示
+- **高级网络监控** - 并发监控多个网络目标，1秒快速响应
+- **电源管理系统** - XSP16芯片集成，实时监控电压、电流、功率
+- **状态驱动动画** - 根据网络状态和系统负载自动切换LED动画
 
-## How to use example
+## 🚀 核心特性
 
-Follow detailed instructions provided specifically for this example.
+### 网络监控系统
+- ✅ 并发ping监控（4个目标IP）
+- ✅ 1秒快速监控模式
+- ✅ 事件驱动状态通知
+- ✅ 性能统计和网络质量监控
+- ✅ 自适应监控间隔调整
 
-Select the instructions depending on Espressif chip installed on your development board:
+### LED动画系统
+- ✅ JSON配置的多动画系统
+- ✅ 9种系统状态动画
+- ✅ 硬编码动画回退机制
+- ✅ 32x32像素矩阵支持
 
-- [ESP32 Getting Started Guide](https://docs.espressif.com/projects/esp-idf/en/stable/get-started/index.html)
-- [ESP32-S2 Getting Started Guide](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s2/get-started/index.html)
+### 电源管理
+- ✅ XSP16电源芯片UART通信
+- ✅ 实时电压、电流、功率监控
+- ✅ 基于功耗的负载检测（>50W触发）
 
-
-## Example folder contents
-
-The project **hello_world** contains one source file in C language [hello_world_main.c](main/hello_world_main.c). The file is located in folder [main](main).
-
-ESP-IDF projects are built using CMake. The project build configuration is contained in `CMakeLists.txt` files that provide set of directives and instructions describing the project's source files and targets (executable, library, or both).
-
-Below is short explanation of remaining files in the project folder.
+## 📁 项目结构
 
 ```
-├── CMakeLists.txt
-├── pytest_hello_world.py      Python script used for automated testing
-├── main
-│   ├── CMakeLists.txt
-│   └── hello_world_main.c
-└── README.md                  This is the file you are currently reading
+rm01-bsp/
+├── components/
+│   ├── led_matrix/              # LED矩阵控制模块
+│   ├── rm01_esp32s3_bsp/        # BSP硬件抽象层
+│   └── ...
+├── main/
+│   ├── hello_world_main.c       # 主程序
+│   ├── system_state_controller.c # 系统状态控制
+│   ├── network_animation_controller.c # 网络动画联动
+│   └── ...
+├── README_POWER_CHIP.md         # 电源芯片文档
+└── main/README_ANIMATION.md     # 动画系统文档
 ```
 
-For more information on structure and contents of ESP-IDF projects, please refer to Section [Build System](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-guides/build-system.html) of the ESP-IDF Programming Guide.
+## 🔧 快速开始
 
-## Troubleshooting
+### 环境准备
+```bash
+# 安装ESP-IDF v5.1+
+. $HOME/esp/esp-idf/export.sh
 
-* Program upload failure
+# 克隆项目
+git clone <repository-url>
+cd rm01-bsp
+```
 
-    * Hardware connection is not correct: run `idf.py -p PORT monitor`, and reboot your board to see if there are any output logs.
-    * The baud rate for downloading is too high: lower your baud rate in the `menuconfig` menu, and try again.
+### 编译和烧录
+```bash
+# 配置目标芯片
+idf.py set-target esp32s3
 
-## Technical support and feedback
+# 编译项目
+idf.py build
 
-Please use the following feedback channels:
+# 烧录和监控
+idf.py flash monitor
+```
 
-* For technical queries, go to the [esp32.com](https://esp32.com/) forum
-* For a feature request or bug report, create a [GitHub issue](https://github.com/espressif/esp-idf/issues)
+## 📊 系统状态
+
+项目支持9种智能状态：
+1. **DEMO** - 演示模式
+2. **STARTUP** - 启动状态
+3. **ALL_CONNECTED** - 全部连接
+4. **PARTIAL_CONNECTED** - 部分连接
+5. **USER_DISCONNECTED** - 用户断开
+6. **INTERNET_ONLY** - 仅互联网
+7. **ISOLATED** - 完全隔离
+8. **HIGH_TEMPERATURE** - 高温警告
+9. **COMPUTING** - 计算负载状态
+
+## 🌐 Web监控界面
+
+访问设备IP地址查看实时网络监控界面：
+- 实时网络状态显示
+- 响应时间统计
+- 丢包率监控
+- 自动刷新
+
+## 📖 详细文档
+
+- [系统状态控制器文档](main/README_SYSTEM_STATE.md) - 完整实现状态报告
+- [LED动画系统文档](main/README_ANIMATION.md) - 动画配置和使用
+- [电源系统文档](README_POWER_CHIP.md) - XSP16电源芯片集成
+
+## 🛠️ 开发说明
+
+### 支持的目标
+- ESP32-S3 (主要支持)
+- ESP32 (基础支持)
+
+### 关键依赖
+- ESP-IDF v5.1+
+- LED Strip驱动
+- FreeRTOS
+- lwIP网络栈
+
+## 📝 版本信息
+
+- **当前版本**: v1.0
+- **最后更新**: 2025-01-27
+- **支持芯片**: ESP32-S3
+
+## 🆘 故障排除
+
+### 常见问题
+1. **LED矩阵不亮** - 检查GPIO9连接和电源
+2. **网络监控失败** - 确认网络配置和IP地址
+3. **烧录失败** - 检查串口连接和波特率设置
+
+### 技术支持
+如遇问题，请检查串口输出日志：
+```bash
+idf.py monitor
+```
+
+## 📄 许可证
+
+本项目遵循ESP-IDF许可证。
 
 We will get back to you as soon as possible.
