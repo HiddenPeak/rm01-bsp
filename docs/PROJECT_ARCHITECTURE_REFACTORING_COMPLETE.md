@@ -67,7 +67,7 @@
 更新 `main/CMakeLists.txt`:
 ```cmake
 # 移除已迁移的源文件
-idf_component_register(SRCS "hello_world_main.c"
+idf_component_register(SRCS "main.c"
                     PRIV_REQUIRES spi_flash rm01_esp32s3_bsp esp_event esp_netif esp_eth lwip led_matrix sdmmc json
                     INCLUDE_DIRS ".")
 ```
@@ -75,7 +75,7 @@ idf_component_register(SRCS "hello_world_main.c"
 ### ✅ 代码更新
 
 #### 1. 主程序更新
-更新 `main/hello_world_main.c`:
+更新 `main/main.c`:
 - 包含BSP头文件：`#include "bsp_system_state.h"`, `#include "bsp_network_animation.h"`, `#include "bsp_power_test.h"`
 - 使用BSP函数：`bsp_system_state_init()`, `bsp_network_animation_start_monitoring()`, `bsp_power_test_start()`, `bsp_power_show_system_status()`
 
@@ -125,7 +125,7 @@ rm01-bsp/
 │   ├── CODE_ARCHITECTURE_REFACTORING_SUMMARY.md
 │   └── DOCUMENTATION_CLEANUP_SUMMARY.md
 ├── main/                      # 应用程序入口
-│   ├── hello_world_main.c     # 主程序（仅包含应用逻辑）
+│   ├── main.c               # 主程序（仅包含应用逻辑）
 │   ├── CMakeLists.txt
 │   └── idf_component.yml
 ├── tests/                     # 测试文件

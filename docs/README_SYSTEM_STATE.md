@@ -137,7 +137,7 @@
 - `main/system_state_controller.c/.h` - 完整的系统状态控制逻辑
 - `main/network_module_api.h` - 网络模组API接口定义（等待实现）
 - `main/example_animation.json` - LED动画配置文件
-- `main/hello_world_main.c` - 主程序集成和循环控制
+- `main/main.c` - 主程序集成和循环控制
 
 ### 网络监控组件
 - `components/rm01_esp32s3_bsp/src/network_monitor.c` - 高级并发网络监控

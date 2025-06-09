@@ -71,7 +71,7 @@ rm01-bsp/
 │   ├── README_POWER_CHIP.md     # 电源芯片文档
 │   └── README_SYSTEM_STATE.md   # 系统状态文档
 ├── main/                        # 应用程序入口
-│   ├── hello_world_main.c       # 主程序（仅应用逻辑）
+│   ├── main.c                   # 主程序（仅应用逻辑）
 │   ├── CMakeLists.txt
 │   └── idf_component.yml
 ├── tests/                       # 测试文件

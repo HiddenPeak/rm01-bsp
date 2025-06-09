@@ -44,7 +44,7 @@
 - **完整的API封装**: 硬件抽象功能完全封装在BSP层
 
 ### 应用层简化
-- **主程序精简**: `main/hello_world_main.c` 只包含应用逻辑
+- **主程序精简**: `main/main.c` 只包含应用逻辑
 - **直接BSP调用**: 移除中间层，直接使用BSP API
 - **配置集中化**: 组件配置文件保持在标准位置
 
@@ -138,7 +138,7 @@ rm01-bsp/
 │           ├── bsp_power_test.c
 │           └── ...
 ├── main/
-│   ├── hello_world_main.c     # 精简的主程序  
+│   ├── main.c               # 精简的主程序  
 │   ├── CMakeLists.txt         # 更新的构建配置
 │   └── idf_component.yml      # 组件依赖配置
 ├── README_SYSTEM_STATE.md     # 系统级文档
