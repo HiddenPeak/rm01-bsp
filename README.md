@@ -131,6 +131,4 @@ idf.py monitor
 
 ## 📄 许可证
 
-本项目遵循ESP-IDF许可证。
-
-We will get back to you as soon as possible.
+本项目尚未确定许可证形式，当前版本以MIT协议为准
