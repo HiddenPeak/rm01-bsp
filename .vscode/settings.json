@@ -1,7 +1,7 @@
 {
     "C_Cpp.intelliSenseEngine": "default",
     "idf.espIdfPathWin": "C:\\Users\\sprin\\esp\\v5.4.1\\esp-idf",
-    "idf.pythonInstallPath": "/Users/thomas/miniconda3/bin/python",
+    "idf.pythonInstallPath": "C:\\Users\\sprin\\.espressif\\tools\\idf-python\\3.11.2\\python.exe",
     "idf.openOcdConfigs": [
         "board/esp32s3-builtin.cfg"
     ],
