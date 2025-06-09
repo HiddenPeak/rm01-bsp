@@ -216,6 +216,57 @@ gcc tests/test_crc.c -o test_crc
 ./test_crc
 ```
 
+## 🛠️ 开发环境设置
+
+### 快速开始
+
+本项目提供了简化的开发环境设置脚本：
+
+#### 方法一：使用快速命令（推荐）
+```powershell
+# 进入项目目录
+cd C:\Users\sprin\rm01-bsp
+
+# 加载快速命令
+. .\quick_commands.ps1
+
+# 使用简化命令
+build      # 构建项目
+flash      # 刷写固件
+monitor    # 监控输出
+fm         # 刷写并监控
+size       # 分析大小
+info       # 显示项目状态
+```
+
+#### 方法二：使用环境设置脚本
+```powershell
+# 检查环境状态
+.\setup_esp_idf.ps1 -CheckOnly
+
+# 设置ESP-IDF环境
+.\setup_esp_idf.ps1
+```
+
+#### 方法三：标准ESP-IDF命令
+```powershell
+# 构建项目
+idf.py build
+
+# 刷写固件并监控
+idf.py flash monitor
+
+# 配置项目
+idf.py menuconfig
+```
+
+### 环境要求
+- ESP-IDF v5.4.1+
+- ESP32-S3 开发板
+- 16MB Flash / SPIRAM支持
+
+详细的环境设置指南请参考：[docs/ESP_IDF_ENVIRONMENT_SETUP_GUIDE.md](docs/ESP_IDF_ENVIRONMENT_SETUP_GUIDE.md)
+
 ## 📝 版本信息
 
 - **当前版本**: v1.1
