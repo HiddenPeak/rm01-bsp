@@ -364,9 +364,8 @@ static esp_err_t parse_power_chip_data(const uint8_t* raw_data, int data_len, bs
         ESP_LOGW(TAG, "未找到有效的XSP16数据包头");
         return ESP_ERR_INVALID_RESPONSE;
     }
-    
-    // 提取数据包
-    uint8_t header = raw_data[packet_start];     // 0xFF
+      // 提取数据包
+    // raw_data[packet_start] 是包头 0xFF
     uint8_t voltage_raw = raw_data[packet_start + 1];
     uint8_t current_raw = raw_data[packet_start + 2];
     uint8_t crc_received = raw_data[packet_start + 3];

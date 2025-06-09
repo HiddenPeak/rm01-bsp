@@ -1,6 +1,6 @@
 /**
- * @file power_chip_test.c
- * @brief 电源芯片UART协商测试
+ * @file bsp_power_test.c
+ * @brief BSP电源芯片UART协商测试
  * 
  * 此文件演示如何使用电源芯片UART协商功能来读取连接在GPIO47上的电源芯片数据
  * 电源芯片数据作为协商信息，仅在系统启动和电压变化超过阈值时触发读取
@@ -16,20 +16,21 @@
  * - 只有在特殊需要时才手动触发bsp_trigger_power_chip_negotiation()
  */
 
+#include "bsp_power_test.h"
 #include "bsp_power.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-static const char *TAG = "POWER_CHIP_TEST";
+static const char *TAG = "BSP_POWER_TEST";
 
 /**
- * @brief 电源芯片数据测试任务
+ * @brief BSP电源芯片数据测试任务
  * 演示基于电压变化触发的电源协商读取方式
  * 注意：避免主动频繁调用bsp_get_power_chip_data()以防止持续读取XSP16数据
  */
-void power_chip_test_task(void *pvParameters) {
-    ESP_LOGI(TAG, "电源芯片测试任务启动 - 基于电压变化触发模式");
+static void bsp_power_test_task(void *pvParameters) {
+    ESP_LOGI(TAG, "BSP电源芯片测试任务启动 - 基于电压变化触发模式");
     
     // 等待UART初始化完成
     vTaskDelay(pdMS_TO_TICKS(1000));
@@ -79,33 +80,33 @@ void power_chip_test_task(void *pvParameters) {
 }
 
 /**
- * @brief 启动电源芯片测试
+ * @brief 启动BSP电源芯片测试
  * 调用此函数来启动基于电压变化触发的电源芯片协商测试
  */
-void start_power_chip_test(void) {
-    ESP_LOGI(TAG, "启动电源芯片协商测试 - 基于电压变化触发模式");
+void bsp_power_test_start(void) {
+    ESP_LOGI(TAG, "启动BSP电源芯片协商测试 - 基于电压变化触发模式");
     
     // 创建测试任务
-    BaseType_t ret = xTaskCreate(power_chip_test_task, 
-                                "power_chip_test", 
+    BaseType_t ret = xTaskCreate(bsp_power_test_task, 
+                                "bsp_power_test", 
                                 4096,               // 栈大小
                                 NULL,              // 任务参数
                                 3,                 // 任务优先级
                                 NULL);             // 任务句柄
     
     if (ret != pdPASS) {
-        ESP_LOGE(TAG, "创建电源芯片测试任务失败");
+        ESP_LOGE(TAG, "创建BSP电源芯片测试任务失败");
     } else {
-        ESP_LOGI(TAG, "电源芯片测试任务已启动");
+        ESP_LOGI(TAG, "BSP电源芯片测试任务已启动");
     }
 }
 
 /**
- * @brief 显示电源系统状态
+ * @brief 显示BSP电源系统状态
  * 综合显示主电源、辅助电源和电源芯片的状态信息
  */
-void show_power_system_status(void) {
-    ESP_LOGI(TAG, "=== 电源系统状态 ===");
+void bsp_power_system_status_show(void) {
+    ESP_LOGI(TAG, "=== BSP电源系统状态 ===");
     
     // 获取主电源和辅助电源状态
     float main_voltage, aux_voltage;
@@ -144,5 +145,5 @@ void show_power_system_status(void) {
         }
     }
     
-    ESP_LOGI(TAG, "==================");
+    ESP_LOGI(TAG, "======================");
 }

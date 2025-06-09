@@ -1,6 +1,6 @@
 /**
- * @file system_state_controller.h
- * @brief 系统状态控制器 - 扩展状态分类系统
+ * @file bsp_system_state.h
+ * @brief 系统状态控制器 - BSP组件
  * 
  * 支持基于多种条件的复杂状态联动：
  * - 模组启动状态（基于网络连接状态组合）
@@ -10,13 +10,12 @@
  * - 待机状态（默认状态）
  */
 
-#ifndef SYSTEM_STATE_CONTROLLER_H
-#define SYSTEM_STATE_CONTROLLER_H
+#ifndef BSP_SYSTEM_STATE_H
+#define BSP_SYSTEM_STATE_H
 
 #include "esp_err.h"
 #include <stdint.h>
 #include <stdbool.h>
-#include "network_module_api.h"  // 包含网络模组API定义
 
 #ifdef __cplusplus
 extern "C" {
@@ -66,28 +65,28 @@ typedef enum {
 } system_animation_index_t;
 
 // 系统状态控制器初始化
-esp_err_t system_state_controller_init(void);
+esp_err_t bsp_system_state_init(void);
 
 // 开始系统状态监控
-void system_state_controller_start_monitoring(void);
+void bsp_system_state_start_monitoring(void);
 
 // 停止系统状态监控
-void system_state_controller_stop(void);
+void bsp_system_state_stop(void);
 
 // 更新状态并生成报告
-void system_state_controller_update_and_report(void);
+void bsp_system_state_update_and_report(void);
 
 // 获取当前系统状态
-system_state_t system_state_get_current(void);
+system_state_t bsp_system_state_get_current(void);
 
 // 获取系统状态名称
-const char* system_state_get_name(system_state_t state);
+const char* bsp_system_state_get_name(system_state_t state);
 
 // 强制设置系统状态（用于测试）
-esp_err_t system_state_force_set(system_state_t state);
+esp_err_t bsp_system_state_force_set(system_state_t state);
 
 // 打印系统状态信息
-void system_state_print_status(void);
+void bsp_system_state_print_status(void);
 
 // 获取系统状态统计信息
 typedef struct {
@@ -103,10 +102,10 @@ typedef struct {
 } system_state_info_t;
 
 // 获取系统状态信息
-esp_err_t system_state_get_info(system_state_info_t* info);
+esp_err_t bsp_system_state_get_info(system_state_info_t* info);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // SYSTEM_STATE_CONTROLLER_H
+#endif // BSP_SYSTEM_STATE_H
