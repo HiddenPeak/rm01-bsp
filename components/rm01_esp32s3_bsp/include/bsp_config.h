@@ -1,0 +1,165 @@
+#ifndef BSP_CONFIG_H
+#define BSP_CONFIG_H
+
+#include "sdkconfig.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// ============ BSP功能配置 ============
+
+// 启用单元测试
+#ifndef CONFIG_BSP_ENABLE_UNIT_TESTS
+#define CONFIG_BSP_ENABLE_UNIT_TESTS 0
+#endif
+
+// 启用性能监控
+#ifndef CONFIG_BSP_ENABLE_PERFORMANCE_MONITORING
+#define CONFIG_BSP_ENABLE_PERFORMANCE_MONITORING 1
+#endif
+
+// 启用扩展健康检查
+#ifndef CONFIG_BSP_ENABLE_EXTENDED_HEALTH_CHECK
+#define CONFIG_BSP_ENABLE_EXTENDED_HEALTH_CHECK 1
+#endif
+
+// 启用配置验证
+#ifndef CONFIG_BSP_ENABLE_CONFIG_VALIDATION
+#define CONFIG_BSP_ENABLE_CONFIG_VALIDATION 1
+#endif
+
+// ============ BSP第二阶段优化配置 ============
+
+// 启用第二阶段优化
+#ifndef CONFIG_BSP_ENABLE_PHASE2_OPTIMIZATION
+#define CONFIG_BSP_ENABLE_PHASE2_OPTIMIZATION 1
+#endif
+
+// 启动模式选择
+#ifndef CONFIG_BSP_STARTUP_MODE_VALUE
+#define CONFIG_BSP_STARTUP_MODE_VALUE 2  // 默认使用第二阶段优化模式
+#endif
+
+// 异步服务超时配置
+#ifndef CONFIG_BSP_ASYNC_WEBSERVER_TIMEOUT_MS
+#define CONFIG_BSP_ASYNC_WEBSERVER_TIMEOUT_MS 5000
+#endif
+
+#ifndef CONFIG_BSP_PARALLEL_HARDWARE_TIMEOUT_MS
+#define CONFIG_BSP_PARALLEL_HARDWARE_TIMEOUT_MS 5000
+#endif
+
+#ifndef CONFIG_BSP_SMART_WAIT_CHECK_INTERVAL_MS
+#define CONFIG_BSP_SMART_WAIT_CHECK_INTERVAL_MS 100
+#endif
+
+#ifndef CONFIG_BSP_DELAYED_SERVICES_DELAY_MS
+#define CONFIG_BSP_DELAYED_SERVICES_DELAY_MS 3000
+#endif
+
+// 启用并行初始化框架
+#ifndef CONFIG_BSP_ENABLE_PARALLEL_INIT_FRAMEWORK
+#define CONFIG_BSP_ENABLE_PARALLEL_INIT_FRAMEWORK 0
+#endif
+
+// ============ BSP健康检查阈值配置 ============
+
+// 内存阈值配置
+#ifndef CONFIG_BSP_HEALTH_CHECK_MIN_FREE_HEAP
+#define CONFIG_BSP_HEALTH_CHECK_MIN_FREE_HEAP 50000  // 50KB
+#endif
+
+#ifndef CONFIG_BSP_HEALTH_CHECK_MIN_STACK_REMAINING
+#define CONFIG_BSP_HEALTH_CHECK_MIN_STACK_REMAINING 512  // 512字节
+#endif
+
+// 电源阈值配置
+#ifndef CONFIG_BSP_HEALTH_CHECK_MIN_VOLTAGE
+#define CONFIG_BSP_HEALTH_CHECK_MIN_VOLTAGE 20.0f  // 20V
+#endif
+
+#ifndef CONFIG_BSP_HEALTH_CHECK_MAX_VOLTAGE
+#define CONFIG_BSP_HEALTH_CHECK_MAX_VOLTAGE 30.0f  // 30V
+#endif
+
+// 温度阈值配置（如果有传感器）
+#ifndef CONFIG_BSP_HEALTH_CHECK_MAX_TEMPERATURE
+#define CONFIG_BSP_HEALTH_CHECK_MAX_TEMPERATURE 80.0f  // 80°C
+#endif
+
+// ============ BSP性能统计配置 ============
+
+// 性能统计更新间隔
+#ifndef CONFIG_BSP_PERFORMANCE_UPDATE_INTERVAL_SEC
+#define CONFIG_BSP_PERFORMANCE_UPDATE_INTERVAL_SEC 5
+#endif
+
+// 性能统计报告间隔
+#ifndef CONFIG_BSP_PERFORMANCE_REPORT_INTERVAL_SEC
+#define CONFIG_BSP_PERFORMANCE_REPORT_INTERVAL_SEC 120
+#endif
+
+// 健康检查间隔
+#ifndef CONFIG_BSP_HEALTH_CHECK_INTERVAL_SEC
+#define CONFIG_BSP_HEALTH_CHECK_INTERVAL_SEC 120
+#endif
+
+// ============ BSP调试配置 ============
+
+// 启用详细日志
+#ifndef CONFIG_BSP_ENABLE_VERBOSE_LOGGING
+#define CONFIG_BSP_ENABLE_VERBOSE_LOGGING 0
+#endif
+
+// 启用调试断言
+#ifndef CONFIG_BSP_ENABLE_DEBUG_ASSERTIONS
+#define CONFIG_BSP_ENABLE_DEBUG_ASSERTIONS 1
+#endif
+
+// ============ BSP任务配置 ============
+
+// 动画任务堆栈大小
+#ifndef CONFIG_BSP_ANIMATION_TASK_STACK_SIZE
+#define CONFIG_BSP_ANIMATION_TASK_STACK_SIZE 4096
+#endif
+
+// 动画任务优先级
+#ifndef CONFIG_BSP_ANIMATION_TASK_PRIORITY
+#define CONFIG_BSP_ANIMATION_TASK_PRIORITY 5
+#endif
+
+// ============ BSP网络配置 ============
+
+// 网络监控超时时间
+#ifndef CONFIG_BSP_NETWORK_MONITOR_TIMEOUT_MS
+#define CONFIG_BSP_NETWORK_MONITOR_TIMEOUT_MS 5000
+#endif
+
+// 网络重连最大尝试次数
+#ifndef CONFIG_BSP_NETWORK_MAX_RETRY_COUNT
+#define CONFIG_BSP_NETWORK_MAX_RETRY_COUNT 3
+#endif
+
+// ============ BSP错误恢复配置 ============
+
+// 启用自动错误恢复
+#ifndef CONFIG_BSP_ENABLE_AUTO_ERROR_RECOVERY
+#define CONFIG_BSP_ENABLE_AUTO_ERROR_RECOVERY 1
+#endif
+
+// 错误恢复最大尝试次数
+#ifndef CONFIG_BSP_ERROR_RECOVERY_MAX_ATTEMPTS
+#define CONFIG_BSP_ERROR_RECOVERY_MAX_ATTEMPTS 3
+#endif
+
+// 错误恢复延迟时间
+#ifndef CONFIG_BSP_ERROR_RECOVERY_DELAY_MS
+#define CONFIG_BSP_ERROR_RECOVERY_DELAY_MS 1000
+#endif
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // BSP_CONFIG_H

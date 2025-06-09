@@ -337,3 +337,9 @@ pytest pytest_hello_world.py
 ---
 
 **注意**: 本项目已完成v1.1架构重构，建议查看 `docs/` 目录下的重构文档了解详细变更。
+
+## Copilot 环境变量配置
+``` bash
+& "C:\Users\sprin\esp\v5.4.1\esp-idf\export.ps1";
+$env:IDF_PATH = "C:\Users\sprin\esp\v5.4.1\esp-idf"
+```

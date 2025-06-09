@@ -1,0 +1,299 @@
+menu "RM01 ESP32-S3 BSP Configuration"
+
+    menu "BSP Initialization Optimization"
+        
+        config BSP_ENABLE_PHASE2_OPTIMIZATION
+            bool "Enable BSP Phase 2 Optimization"
+            default y
+            help
+                Enable BSP Phase 2 optimization to reduce initialization time
+                from 36.1 seconds to 15-20 seconds (45-58% improvement).
+                
+                This includes:
+                - Asynchronous web server startup
+                - Parallel hardware initialization
+                - Smart waiting mechanisms
+                - Delayed service startup
+        
+        if BSP_ENABLE_PHASE2_OPTIMIZATION
+            
+            config BSP_ASYNC_WEBSERVER_TIMEOUT_MS
+                int "Async Web Server Startup Timeout (ms)"
+                default 5000
+                range 1000 10000
+                help
+                    Maximum time to wait for web server async startup completion.
+            
+            config BSP_PARALLEL_HARDWARE_TIMEOUT_MS
+                int "Parallel Hardware Init Timeout (ms)"
+                default 5000
+                range 2000 10000
+                help
+                    Maximum time to wait for parallel hardware initialization.
+            
+            config BSP_SMART_WAIT_CHECK_INTERVAL_MS
+                int "Smart Wait Check Interval (ms)"
+                default 100
+                range 50 500
+                help
+                    Interval between condition checks in smart waiting mechanism.
+            
+            config BSP_DELAYED_SERVICES_DELAY_MS
+                int "Delayed Services Startup Delay (ms)"
+                default 3000
+                range 1000 10000
+                help
+                    Delay before starting non-critical services.
+                    
+        endif # BSP_ENABLE_PHASE2_OPTIMIZATION
+        
+        config BSP_ENABLE_PARALLEL_INIT_FRAMEWORK
+            bool "Enable Parallel Initialization Framework"
+            default n
+            depends on BSP_ENABLE_PHASE2_OPTIMIZATION
+            help
+                Enable the full parallel initialization framework for maximum
+                performance improvement. This is more complex but provides
+                better optimization results.
+        
+        if BSP_ENABLE_PARALLEL_INIT_FRAMEWORK
+            
+            config BSP_PARALLEL_INIT_PHASE1_TIMEOUT_MS
+                int "Phase 1 Initialization Timeout (ms)"
+                default 3000
+                range 2000 8000
+                help
+                    Timeout for Phase 1 (basic hardware) parallel initialization.
+            
+            config BSP_PARALLEL_INIT_PHASE2_TIMEOUT_MS
+                int "Phase 2 Initialization Timeout (ms)"
+                default 4000
+                range 2000 8000
+                help
+                    Timeout for Phase 2 (network & display) parallel initialization.
+            
+            config BSP_PARALLEL_INIT_PHASE3_TIMEOUT_MS
+                int "Phase 3 Initialization Timeout (ms)"
+                default 5000
+                range 3000 10000
+                help
+                    Timeout for Phase 3 (advanced services) parallel initialization.
+                    
+        endif # BSP_ENABLE_PARALLEL_INIT_FRAMEWORK
+        
+    endmenu # BSP Initialization Optimization
+    
+    menu "BSP Performance Monitoring"
+        
+        config BSP_ENABLE_PERFORMANCE_MONITORING
+            bool "Enable BSP Performance Monitoring"
+            default y
+            help
+                Enable detailed performance monitoring and reporting for
+                BSP initialization process.
+        
+        if BSP_ENABLE_PERFORMANCE_MONITORING
+            
+            config BSP_PERFORMANCE_LOG_LEVEL
+                int "Performance Log Level"
+                default 3
+                range 0 5
+                help
+                    Log level for performance monitoring:
+                    0 = None, 1 = Error, 2 = Warning, 3 = Info, 4 = Debug, 5 = Verbose
+            
+            config BSP_PERFORMANCE_REPORT_DETAILED
+                bool "Enable Detailed Performance Report"
+                default y
+                help
+                    Generate detailed performance report including timing breakdowns
+                    and optimization effectiveness analysis.
+                    
+        endif # BSP_ENABLE_PERFORMANCE_MONITORING
+        
+    endmenu # BSP Performance Monitoring
+    
+    menu "BSP Startup Mode Selection"
+        
+        choice BSP_STARTUP_MODE
+            prompt "BSP Startup Mode"
+            default BSP_STARTUP_MODE_OPTIMIZED
+            help
+                Select the BSP startup mode based on your requirements.
+            
+            config BSP_STARTUP_MODE_LEGACY
+                bool "Legacy Mode"
+                help
+                    Use the original BSP initialization sequence.
+                    Initialization time: ~44.6 seconds
+            
+            config BSP_STARTUP_MODE_PHASE1_OPTIMIZED
+                bool "Phase 1 Optimized"
+                help
+                    Use Phase 1 optimizations (basic delay reductions).
+                    Initialization time: ~36.1 seconds
+            
+            config BSP_STARTUP_MODE_OPTIMIZED
+                bool "Phase 2 Optimized (Recommended)"
+                depends on BSP_ENABLE_PHASE2_OPTIMIZATION
+                help
+                    Use Phase 2 optimizations for best performance.
+                    Initialization time: 15-20 seconds
+            
+            config BSP_STARTUP_MODE_FAST
+                bool "Fast Mode"
+                depends on BSP_ENABLE_PHASE2_OPTIMIZATION
+                help
+                    Ultra-fast startup with only critical services.
+                    Core functionality ready in ~10 seconds
+            
+        endchoice
+        
+        config BSP_STARTUP_MODE_VALUE
+            int
+            default 0 if BSP_STARTUP_MODE_LEGACY
+            default 1 if BSP_STARTUP_MODE_PHASE1_OPTIMIZED
+            default 2 if BSP_STARTUP_MODE_OPTIMIZED
+            default 3 if BSP_STARTUP_MODE_FAST
+        
+    endmenu # BSP Startup Mode Selection
+    
+    menu "BSP Component Configuration"
+        
+        config BSP_ENABLE_WEBSERVER
+            bool "Enable Web Server"
+            default y
+            help
+                Enable HTTP web server for device management.
+        
+        config BSP_ENABLE_NETWORK_MONITORING
+            bool "Enable Network Monitoring"
+            default y
+            help
+                Enable network connectivity monitoring and status reporting.
+        
+        config BSP_ENABLE_SYSTEM_STATE_MONITORING
+            bool "Enable System State Monitoring"
+            default y
+            help
+                Enable advanced system state monitoring and LED animations.
+        
+        config BSP_ENABLE_POWER_CHIP_MONITORING
+            bool "Enable Power Chip Monitoring"
+            default y
+            help
+                Enable power chip UART communication and monitoring.
+        
+        config BSP_ENABLE_WS2812_TESTING
+            bool "Enable WS2812 Testing"
+            default n
+            help
+                Enable WS2812 LED testing during initialization.
+                Disabling this can save initialization time.
+        
+    endmenu # BSP Component Configuration
+    
+    menu "BSP Timing Configuration"
+        
+        config BSP_INIT_DELAY_NETWORK_MS
+            int "Network Initialization Delay (ms)"
+            default 200 if BSP_ENABLE_PHASE2_OPTIMIZATION
+            default 500 if !BSP_ENABLE_PHASE2_OPTIMIZATION
+            range 100 5000
+            help
+                Delay after network hardware initialization.
+        
+        config BSP_INIT_DELAY_LED_MATRIX_MS
+            int "LED Matrix Initialization Delay (ms)"
+            default 100 if BSP_ENABLE_PHASE2_OPTIMIZATION
+            default 200 if !BSP_ENABLE_PHASE2_OPTIMIZATION
+            range 50 2000
+            help
+                Delay after LED matrix initialization.
+        
+        config BSP_INIT_DELAY_SYSTEM_MONITOR_MS
+            int "System Monitor Data Collection Delay (ms)"
+            default 1000 if BSP_ENABLE_PHASE2_OPTIMIZATION
+            default 2000 if !BSP_ENABLE_PHASE2_OPTIMIZATION
+            range 500 10000
+            help
+                Delay for system monitor to collect initial data.
+        
+        config BSP_ANIMATION_UPDATE_RATE_MS
+            int "Animation Update Rate (ms)"
+            default 30
+            range 10 100
+            help
+                LED animation update interval in milliseconds.
+                Lower values provide smoother animation but use more CPU.
+        
+        config BSP_MAIN_LOOP_INTERVAL_MS
+            int "Main Loop Interval (ms)"
+            default 1000
+            range 100 5000
+            help
+                BSP main loop execution interval.
+        
+    endmenu # BSP Timing Configuration
+    
+    menu "BSP Task Configuration"
+        
+        config BSP_ANIMATION_TASK_STACK_SIZE
+            int "Animation Task Stack Size"
+            default 4096
+            range 2048 8192
+            help
+                Stack size for LED animation update task.
+        
+        config BSP_ANIMATION_TASK_PRIORITY
+            int "Animation Task Priority"
+            default 3
+            range 1 10
+            help
+                Priority for LED animation update task.
+        
+        config BSP_WEBSERVER_TASK_STACK_SIZE
+            int "Web Server Task Stack Size"
+            default 6144
+            range 4096 12288
+            help
+                Stack size for web server initialization task.
+        
+        config BSP_NETWORK_MONITOR_TASK_STACK_SIZE
+            int "Network Monitor Task Stack Size"
+            default 4096
+            range 2048 8192
+            help
+                Stack size for network monitoring task.
+        
+    endmenu # BSP Task Configuration
+    
+    menu "BSP Health Check Configuration"
+        
+        config BSP_ENABLE_HEALTH_CHECK
+            bool "Enable BSP Health Check"
+            default y
+            help
+                Enable periodic BSP component health checking.
+        
+        if BSP_ENABLE_HEALTH_CHECK
+            
+            config BSP_HEALTH_CHECK_INTERVAL_S
+                int "Health Check Interval (seconds)"
+                default 120
+                range 30 600
+                help
+                    Interval between BSP health checks.
+            
+            config BSP_HEALTH_CHECK_MIN_STACK_REMAINING
+                int "Minimum Stack Remaining (bytes)"
+                default 512
+                range 256 2048
+                help
+                    Minimum stack space required for tasks to pass health check.
+                    
+        endif # BSP_ENABLE_HEALTH_CHECK
+        
+    endmenu # BSP Health Check Configuration
+
+endmenu # RM01 ESP32-S3 BSP Configuration

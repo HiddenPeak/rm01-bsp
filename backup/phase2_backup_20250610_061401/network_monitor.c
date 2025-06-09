@@ -34,7 +34,7 @@ static volatile int current_ping_target = -1;
 
 // 高实时性监控控制变量
 static bool fast_monitoring_enabled = false;
-static uint32_t monitoring_interval_ms = 1000;  // 默认3秒间隔
+static uint32_t monitoring_interval_ms = 3000;  // 默认3秒间隔
 
 // 自适应监控功能
 static bool adaptive_monitoring_enabled = false;
@@ -369,7 +369,7 @@ static esp_err_t nm_start_simple_ping(int target_index) {
     esp_ping_config_t ping_config = ESP_PING_DEFAULT_CONFIG();
     ping_config.target_addr = nm_targets[target_index].addr;
     ping_config.count = 1;                          // 只发送1个ping包提高速度    ping_config.interval_ms = 50;                   // 优化: 100→50ms 减少间隔
-    ping_config.timeout_ms = 200;                   // 优化: 1000→500ms 减少超时
+    ping_config.timeout_ms = 500;                   // 优化: 1000→500ms 减少超时
     ping_config.task_stack_size = 3072;             // 优化: 减少栈空间
     ping_config.task_prio = 3;                      // 提高优先级
     ping_config.data_size = 32;                     // 小数据包
@@ -402,7 +402,7 @@ static esp_err_t nm_start_simple_ping(int target_index) {
         return ret;
     }
       // 等待ping完成 - 优化: 减少等待时间提高实时性
-    vTaskDelay(pdMS_TO_TICKS(200));  // 优化: 1500→200ms
+    vTaskDelay(pdMS_TO_TICKS(800));  // 优化: 1500→800ms
     
     // 停止并删除ping会话
     esp_ping_stop(ping_handle);
@@ -493,7 +493,7 @@ void nm_enable_fast_monitoring(bool enable) {    if (xSemaphoreTake(nm_mutex, pd
 
 void nm_set_monitoring_interval(uint32_t interval_ms) {
     if (interval_ms < 300) {
-        interval_ms = 100;  // 优化: 最小间隔500→300ms
+        interval_ms = 300;  // 优化: 最小间隔500→300ms
     } else if (interval_ms > 60000) {
         interval_ms = 60000;  // 最大间隔60秒
     }
@@ -568,7 +568,7 @@ static void nm_task(void *pvParameters) {
             }
             
             // 等待所有ping完成或超时
-            uint32_t wait_time = advanced_config.ping_timeout_ms + 200; // 额外500ms缓冲
+            uint32_t wait_time = advanced_config.ping_timeout_ms + 500; // 额外500ms缓冲
             uint32_t waited = 0;
             
             while (active_ping_count > 0 && waited < wait_time) {
