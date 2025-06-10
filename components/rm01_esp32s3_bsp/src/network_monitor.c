@@ -114,6 +114,11 @@ const nm_target_t* nm_get_targets_readonly(void) {
     return nm_targets;  // 调用者承诺只读访问
 }
 
+// 检查网络监控系统是否已初始化
+static bool is_network_monitor_initialized(void) {
+    return (nm_mutex != NULL);
+}
+
 void nm_init(void) {
     // 创建互斥锁
     nm_mutex = xSemaphoreCreateMutex();
@@ -143,12 +148,10 @@ void nm_init(void) {
     strncpy(nm_targets[2].name, "用户主机", sizeof(nm_targets[2].name));
     
     strncpy(nm_targets[3].ip, NM_INTERNET_IP, sizeof(nm_targets[3].ip));
-    strncpy(nm_targets[3].name, "互联网", sizeof(nm_targets[3].name));
-    
-    // 设置索引和初始状态
+    strncpy(nm_targets[3].name, "互联网", sizeof(nm_targets[3].name));    // 设置索引和初始状态
     for (int i = 0; i < NM_TARGET_COUNT; i++) {
         nm_targets[i].index = i;
-        nm_targets[i].status = NM_STATUS_UNKNOWN;
+        nm_targets[i].status = NM_STATUS_UNKNOWN;      // 初始状态设为未知，ping后会更新为连接或断开
         nm_targets[i].prev_status = NM_STATUS_UNKNOWN;
         ipaddr_aton(nm_targets[i].ip, &nm_targets[i].addr);
     }
@@ -215,6 +218,12 @@ void nm_stop_monitoring(void) {
 nm_status_t nm_get_status(const char* ip) {
     nm_status_t status = NM_STATUS_UNKNOWN;
     
+    // 检查网络监控是否已初始化
+    if (!is_network_monitor_initialized()) {
+        ESP_LOGW(TAG, "网络监控系统未初始化，返回未知状态");
+        return NM_STATUS_UNKNOWN;
+    }
+    
     // 获取互斥锁
     if (xSemaphoreTake(nm_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
         // 查找匹配的目标
@@ -231,6 +240,12 @@ nm_status_t nm_get_status(const char* ip) {
 }
 
 void nm_get_all_status(void) {
+    // 检查网络监控是否已初始化
+    if (!is_network_monitor_initialized()) {
+        ESP_LOGW(TAG, "网络监控系统未初始化，无法获取状态");
+        return;
+    }
+    
     // 获取互斥锁
     if (xSemaphoreTake(nm_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
         ESP_LOGI(TAG, "=== 网络状态报告 ===");
@@ -323,11 +338,10 @@ static void nm_ping_timeout_callback(esp_ping_handle_t hdl, void *args) {
             consecutive_failure_count++;
             consecutive_success_count = 0;
             
-            // 如果丢包率高于30%，认为断开
-            if (loss_rate > 30.0f) {
-                nm_update_status(&nm_targets[target_index], NM_STATUS_DOWN);
-            }
-             ESP_LOGW(TAG, "Ping超时: %s (%s), 丢包率=%.1f%%, 连续失败=%"PRIu32,
+            // 超时就应该设置为断开状态，不管丢包率
+            nm_update_status(&nm_targets[target_index], NM_STATUS_DOWN);
+            
+            ESP_LOGW(TAG, "Ping超时: %s (%s), 丢包率=%.1f%%, 连续失败=%"PRIu32,
                      nm_targets[target_index].name, nm_targets[target_index].ip, loss_rate, consecutive_failure_count);
         }
         xSemaphoreGive(nm_mutex);
@@ -365,11 +379,11 @@ static esp_err_t nm_start_simple_ping(int target_index) {
     }
     
     current_ping_target = target_index;
-    
-    esp_ping_config_t ping_config = ESP_PING_DEFAULT_CONFIG();
+      esp_ping_config_t ping_config = ESP_PING_DEFAULT_CONFIG();
     ping_config.target_addr = nm_targets[target_index].addr;
-    ping_config.count = 1;                          // 只发送1个ping包提高速度    ping_config.interval_ms = 50;                   // 优化: 100→50ms 减少间隔
-    ping_config.timeout_ms = 200;                   // 优化: 1000→500ms 减少超时
+    ping_config.count = 1;                          // 只发送1个ping包提高速度
+    ping_config.interval_ms = 50;                   // 优化: 100→50ms 减少间隔
+    ping_config.timeout_ms = 500;                   // 500ms超时时间
     ping_config.task_stack_size = 3072;             // 优化: 减少栈空间
     ping_config.task_prio = 3;                      // 提高优先级
     ping_config.data_size = 32;                     // 小数据包
@@ -383,26 +397,34 @@ static esp_err_t nm_start_simple_ping(int target_index) {
     
     esp_ping_handle_t ping_handle;
     esp_err_t ret = esp_ping_new_session(&ping_config, &cbs, &ping_handle);
-    
-    if (ret != ESP_OK) {
+      if (ret != ESP_OK) {
         ESP_LOGE(TAG, "创建ping会话失败: %s, 目标=%s", 
                 esp_err_to_name(ret), nm_targets[target_index].ip);
-        current_ping_target = -1;
-        return ret;
+        // 设置状态为断开
+        nm_update_status(&nm_targets[target_index], NM_STATUS_DOWN);
+        current_ping_target = -1;        return ret;
     }
     
-    ESP_LOGD(TAG, "开始ping测试: %s", nm_targets[target_index].ip);
-    ret = esp_ping_start(ping_handle);
+    // 获取当前状态描述
+    const char *current_status_str = "未知";
+    if (nm_targets[target_index].status == NM_STATUS_UP) {
+        current_status_str = "已连接";
+    } else if (nm_targets[target_index].status == NM_STATUS_DOWN) {
+        current_status_str = "已断开";
+    }
     
-    if (ret != ESP_OK) {
+    ESP_LOGI(TAG, "开始ping测试: %s (当前状态: %s)", nm_targets[target_index].ip, current_status_str);
+    ret = esp_ping_start(ping_handle);
+      if (ret != ESP_OK) {
         ESP_LOGE(TAG, "启动ping失败: %s, 目标=%s", 
                 esp_err_to_name(ret), nm_targets[target_index].ip);
+        // 设置状态为断开
+        nm_update_status(&nm_targets[target_index], NM_STATUS_DOWN);
         esp_ping_delete_session(ping_handle);
         current_ping_target = -1;
         return ret;
-    }
-      // 等待ping完成 - 优化: 减少等待时间提高实时性
-    vTaskDelay(pdMS_TO_TICKS(200));  // 优化: 1500→200ms
+    }    // 等待ping完成 - 给足够时间让超时回调执行
+    vTaskDelay(pdMS_TO_TICKS(800));  // 500ms超时 + 300ms缓冲时间
     
     // 停止并删除ping会话
     esp_ping_stop(ping_handle);
@@ -477,76 +499,13 @@ EventGroupHandle_t nm_get_event_group(void) {
     return nm_event_group;
 }
 
-// 高实时性监控接口实现
-void nm_enable_fast_monitoring(bool enable) {    if (xSemaphoreTake(nm_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
-        fast_monitoring_enabled = enable;
-        if (enable) {
-            monitoring_interval_ms = 800;  // 优化: 快速模式1000→800ms间隔
-            ESP_LOGI(TAG, "启用快速监控模式，监控间隔=%" PRIu32 "ms", monitoring_interval_ms);
-        } else {
-            monitoring_interval_ms = 2000;  // 优化: 普通模式3000→2000ms间隔
-            ESP_LOGI(TAG, "禁用快速监控模式，监控间隔=%" PRIu32 "ms", monitoring_interval_ms);
-        }
-        xSemaphoreGive(nm_mutex);
-    }
-}
-
-void nm_set_monitoring_interval(uint32_t interval_ms) {
-    if (interval_ms < 300) {
-        interval_ms = 100;  // 优化: 最小间隔500→300ms
-    } else if (interval_ms > 60000) {
-        interval_ms = 60000;  // 最大间隔60秒
-    }
-    
-    if (xSemaphoreTake(nm_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
-        monitoring_interval_ms = interval_ms;
-        ESP_LOGI(TAG, "设置监控间隔为%" PRIu32 "ms", monitoring_interval_ms);
-        xSemaphoreGive(nm_mutex);
-    }
-}
-
+// 检查模式状态（保留的状态查询函数）
 bool nm_is_fast_mode_enabled(void) {
     return fast_monitoring_enabled;
 }
 
-// 自适应监控接口
-void nm_enable_adaptive_monitoring(bool enable) {
-    if (xSemaphoreTake(nm_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
-        adaptive_monitoring_enabled = enable;
-        ESP_LOGI(TAG, "自适应监控模式 %s", enable ? "启用" : "禁用");
-        xSemaphoreGive(nm_mutex);
-    }
-}
-
-void nm_enable_network_quality_monitoring(bool enable) {
-    if (xSemaphoreTake(nm_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
-        network_quality_monitoring = enable;
-        ESP_LOGI(TAG, "网络质量监控 %s", enable ? "启用" : "禁用");
-        xSemaphoreGive(nm_mutex);
-    }
-}
-
 bool nm_is_adaptive_mode_enabled(void) {
     return adaptive_monitoring_enabled;
-}
-
-// 获取性能统计
-void nm_get_performance_stats(nm_performance_stats_t* stats) {
-    if (!stats) return;
-    
-    if (xSemaphoreTake(nm_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
-        memcpy(stats, &performance_stats, sizeof(nm_performance_stats_t));
-        xSemaphoreGive(nm_mutex);
-    }
-}
-
-// 重置性能统计
-void nm_reset_performance_stats(void) {
-    if (xSemaphoreTake(nm_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
-        memset(&performance_stats, 0, sizeof(nm_performance_stats_t));
-        ESP_LOGI(TAG, "性能统计已重置");
-        xSemaphoreGive(nm_mutex);
-    }
 }
 
 static void nm_task(void *pvParameters) {
@@ -618,14 +577,13 @@ static void nm_task(void *pvParameters) {
         while (1) {
             uint32_t loop_start_time = xTaskGetTickCount();
             performance_stats.monitoring_cycles++;
-            
-            for (int i = 0; i < NM_TARGET_COUNT; i++) {
-                ESP_LOGD(TAG, "开始ping测试目标 %d: %s", i, nm_targets[i].ip);
+              for (int i = 0; i < NM_TARGET_COUNT; i++) {
+                ESP_LOGI(TAG, "开始ping测试目标 %d: %s", i, nm_targets[i].ip);
                 
                 // 执行单次ping测试
                 esp_err_t ret = nm_start_simple_ping(i);
                 if (ret != ESP_OK) {
-                    ESP_LOGW(TAG, "ping测试失败，目标: %s", nm_targets[i].ip);
+                    ESP_LOGW(TAG, "ping测试失败，目标: %s, 错误: %s", nm_targets[i].ip, esp_err_to_name(ret));
                     if (xSemaphoreTake(nm_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
                         nm_update_status(&nm_targets[i], NM_STATUS_DOWN);
                         performance_stats.failed_pings++;
@@ -679,6 +637,12 @@ static void nm_task(void *pvParameters) {
 
 // 注册网络状态变化回调
 void nm_register_status_change_callback(nm_status_change_cb_t callback, void* arg) {
+    // 检查网络监控是否已初始化
+    if (!is_network_monitor_initialized()) {
+        ESP_LOGW(TAG, "网络监控系统未初始化，无法注册回调");
+        return;
+    }
+    
     if (xSemaphoreTake(nm_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
         nm_status_change_callback = callback;
         nm_callback_arg = arg;
@@ -690,6 +654,12 @@ void nm_register_status_change_callback(nm_status_change_cb_t callback, void* ar
 // 获取指定IP的详细信息
 bool nm_get_target_info(const char* ip, nm_target_t* target_info) {
     if (!ip || !target_info) {
+        return false;
+    }
+    
+    // 检查网络监控是否已初始化
+    if (!is_network_monitor_initialized()) {
+        ESP_LOGW(TAG, "网络监控系统未初始化，无法获取目标信息");
         return false;
     }
     
@@ -1182,8 +1152,46 @@ static void nm_process_ping_results_task(void *pvParameters) {
 
 // 新的并发监控接口实现
 
-// 启用并发监控模式
-void nm_enable_concurrent_monitoring(bool enable) {
+// 检查并发监控状态
+bool nm_is_concurrent_monitoring_enabled(void) {
+    return concurrent_monitoring_enabled;
+}
+
+// BSP兼容的并发模式检查接口
+bool nm_is_concurrent_mode_enabled(void) {
+    return concurrent_monitoring_enabled;
+}
+
+// ============================================================================
+// 标准化接口实现 (BSP重构第二阶段) - 2025年6月10日
+// ============================================================================
+
+// 配置接口实现 (nm_config_*)
+
+// 监控模式配置
+void nm_config_set_fast_mode(bool enable) {
+    if (xSemaphoreTake(nm_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+        fast_monitoring_enabled = enable;
+        if (enable) {
+            monitoring_interval_ms = 800;  // 快速模式间隔
+            ESP_LOGI(TAG, "[CONFIG] 启用快速监控模式，监控间隔=%" PRIu32 "ms", monitoring_interval_ms);
+        } else {
+            monitoring_interval_ms = 2000;  // 普通模式间隔
+            ESP_LOGI(TAG, "[CONFIG] 禁用快速监控模式，监控间隔=%" PRIu32 "ms", monitoring_interval_ms);
+        }
+        xSemaphoreGive(nm_mutex);
+    }
+}
+
+void nm_config_set_adaptive_mode(bool enable) {
+    if (xSemaphoreTake(nm_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+        adaptive_monitoring_enabled = enable;
+        ESP_LOGI(TAG, "[CONFIG] 自适应监控模式 %s", enable ? "启用" : "禁用");
+        xSemaphoreGive(nm_mutex);
+    }
+}
+
+void nm_config_set_concurrent_mode(bool enable) {
     if (xSemaphoreTake(nm_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
         concurrent_monitoring_enabled = enable;
         
@@ -1192,7 +1200,7 @@ void nm_enable_concurrent_monitoring(bool enable) {
             for (int i = 0; i < NM_TARGET_COUNT; i++) {
                 esp_err_t ret = nm_create_persistent_ping_session(i);
                 if (ret != ESP_OK) {
-                    ESP_LOGW(TAG, "创建持久化ping会话失败，目标: %s", nm_targets[i].ip);
+                    ESP_LOGW(TAG, "[CONFIG] 创建持久化ping会话失败，目标: %s", nm_targets[i].ip);
                 }
             }
         } else {
@@ -1206,20 +1214,42 @@ void nm_enable_concurrent_monitoring(bool enable) {
             }
         }
         
-        ESP_LOGI(TAG, "并发监控模式 %s", enable ? "启用" : "禁用");
+        ESP_LOGI(TAG, "[CONFIG] 并发监控模式 %s", enable ? "启用" : "禁用");
         xSemaphoreGive(nm_mutex);
     }
 }
 
-// 配置高级参数
-esp_err_t nm_configure_advanced(const nm_advanced_config_t* config) {
+void nm_config_set_quality_monitor(bool enable) {
+    if (xSemaphoreTake(nm_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+        network_quality_monitoring = enable;
+        ESP_LOGI(TAG, "[CONFIG] 网络质量监控 %s", enable ? "启用" : "禁用");
+        xSemaphoreGive(nm_mutex);
+    }
+}
+
+// 参数配置
+void nm_config_set_interval(uint32_t interval_ms) {
+    if (interval_ms < 300) {
+        interval_ms = 300;  // 最小间隔300ms
+    } else if (interval_ms > 60000) {
+        interval_ms = 60000;  // 最大间隔60秒
+    }
+    
+    if (xSemaphoreTake(nm_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+        monitoring_interval_ms = interval_ms;
+        ESP_LOGI(TAG, "[CONFIG] 设置监控间隔为%" PRIu32 "ms", monitoring_interval_ms);
+        xSemaphoreGive(nm_mutex);
+    }
+}
+
+esp_err_t nm_config_set_advanced(const nm_advanced_config_t* config) {
     if (!config) {
         return ESP_ERR_INVALID_ARG;
     }
     
     if (xSemaphoreTake(nm_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
         memcpy(&advanced_config, config, sizeof(nm_advanced_config_t));
-        ESP_LOGI(TAG, "高级配置已更新");
+        ESP_LOGI(TAG, "[CONFIG] 高级配置已更新");
         xSemaphoreGive(nm_mutex);
         return ESP_OK;
     }
@@ -1227,8 +1257,52 @@ esp_err_t nm_configure_advanced(const nm_advanced_config_t* config) {
     return ESP_ERR_TIMEOUT;
 }
 
-// 获取性能指标
-void nm_get_performance_metrics(nm_performance_metrics_t* metrics) {
+// 状态查询
+bool nm_config_is_fast_mode_enabled(void) {
+    return fast_monitoring_enabled;
+}
+
+bool nm_config_is_adaptive_mode_enabled(void) {
+    return adaptive_monitoring_enabled;
+}
+
+bool nm_config_is_concurrent_mode_enabled(void) {
+    return concurrent_monitoring_enabled;
+}
+
+void nm_config_get_advanced(nm_advanced_config_t* config) {
+    if (!config) {
+        return;
+    }
+    
+    if (xSemaphoreTake(nm_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+        memcpy(config, &advanced_config, sizeof(nm_advanced_config_t));
+        xSemaphoreGive(nm_mutex);
+    }
+}
+
+// 性能接口实现 (nm_perf_*)
+
+// 统计数据管理
+void nm_perf_get_stats(nm_performance_stats_t* stats) {
+    if (!stats) return;
+    
+    if (xSemaphoreTake(nm_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+        memcpy(stats, &performance_stats, sizeof(nm_performance_stats_t));
+        xSemaphoreGive(nm_mutex);
+    }
+}
+
+void nm_perf_reset_stats(void) {
+    if (xSemaphoreTake(nm_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+        memset(&performance_stats, 0, sizeof(nm_performance_stats_t));
+        ESP_LOGI(TAG, "[PERF] 性能统计已重置");
+        xSemaphoreGive(nm_mutex);
+    }
+}
+
+// 指标数据管理
+void nm_perf_get_metrics(nm_performance_metrics_t* metrics) {
     if (!metrics) {
         return;
     }
@@ -1239,21 +1313,64 @@ void nm_get_performance_metrics(nm_performance_metrics_t* metrics) {
     }
 }
 
-// 重置性能指标
-void nm_reset_performance_metrics(void) {
+void nm_perf_reset_metrics(void) {
     if (xSemaphoreTake(nm_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
         memset(&performance_metrics, 0, sizeof(nm_performance_metrics_t));
-        ESP_LOGI(TAG, "性能指标已重置");
+        ESP_LOGI(TAG, "[PERF] 性能指标已重置");
         xSemaphoreGive(nm_mutex);
     }
 }
 
-// 检查并发监控状态
-bool nm_is_concurrent_monitoring_enabled(void) {
-    return concurrent_monitoring_enabled;
+// 实时性能监控
+uint32_t nm_perf_get_current_latency(const char* ip) {
+    if (!ip) return 0;
+    
+    uint32_t latency = 0;
+    if (xSemaphoreTake(nm_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+        for (int i = 0; i < NM_TARGET_COUNT; i++) {
+            if (strcmp(nm_targets[i].ip, ip) == 0) {
+                latency = nm_targets[i].last_response_time;
+                break;
+            }
+        }
+        xSemaphoreGive(nm_mutex);
+    }
+    
+    return latency;
 }
 
-// BSP兼容的并发模式检查接口
-bool nm_is_concurrent_mode_enabled(void) {
-    return concurrent_monitoring_enabled;
+float nm_perf_get_packet_loss_rate(const char* ip) {
+    if (!ip) return 100.0f;
+    
+    float loss_rate = 100.0f;
+    if (xSemaphoreTake(nm_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+        for (int i = 0; i < NM_TARGET_COUNT; i++) {
+            if (strcmp(nm_targets[i].ip, ip) == 0) {
+                loss_rate = nm_targets[i].loss_rate;
+                break;
+            }
+        }
+        xSemaphoreGive(nm_mutex);
+    }
+    
+    return loss_rate;
+}
+
+uint32_t nm_perf_get_uptime_percent(const char* ip) {
+    if (!ip) return 0;
+    
+    uint32_t uptime_percent = 0;
+    if (xSemaphoreTake(nm_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+        for (int i = 0; i < NM_TARGET_COUNT; i++) {
+            if (strcmp(nm_targets[i].ip, ip) == 0) {
+                if (nm_targets[i].packets_sent > 0) {
+                    uptime_percent = (uint32_t)((float)nm_targets[i].packets_received / 
+                                               (float)nm_targets[i].packets_sent * 100.0f);
+                }
+                break;
+            }
+        }
+        xSemaphoreGive(nm_mutex);
+    }
+      return uptime_percent;
 }

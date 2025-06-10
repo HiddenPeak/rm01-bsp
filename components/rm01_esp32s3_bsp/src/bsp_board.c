@@ -6,19 +6,24 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
-// #include "color_calibration.h"
 #include <math.h>
 #include <inttypes.h> // 添加此头文件以支持 PRIuXX 宏
 #include "sdmmc_cmd.h" // 用于SD卡命令和信息打印
-#include "bsp_power.h" // 引入电源管理头文件
+#include "bsp_power.h" // 引入电源管理头文件（包含测试功能）
 #include "led_matrix.h" // 引入LED矩阵头文件
+#include "led_animation.h" // 引入LED动画头文件
 #include "bsp_webserver.h" // 引入Web服务器头文件
+// 新架构头文件
+#include "bsp_status_interface.h"   // 统一状态接口
+#include "bsp_network_adapter.h"    // 简化的网络适配器
+#include "bsp_state_manager.h"      // 状态管理器
+#include "bsp_display_controller.h" // 显示控制器
+#include "bsp_touch_ws2812_display.h" // Touch WS2812显示控制器
 
 static const char *TAG = "BSP";
 
 // 配置常量 - 优化后的初始化延迟时间
 #define BSP_INIT_DELAY_NETWORK_MS           500     // 网络监控系统启动延迟 (优化: 2000→500ms)
-#define BSP_INIT_DELAY_LED_MATRIX_MS        200     // LED矩阵初始化延迟 (优化: 1000→200ms)
 #define BSP_INIT_DELAY_SYSTEM_MONITOR_MS    2000    // 系统监控数据收集延迟 (优化: 8000→2000ms)
 #define BSP_ANIMATION_UPDATE_RATE_MS        30      // LED动画更新频率（约33FPS）
 
@@ -26,7 +31,7 @@ static const char *TAG = "BSP";
 #define BSP_MAIN_LOOP_INTERVAL_MS           1000    // 主循环间隔（1秒）
 #define BSP_SYSTEM_STATE_REPORT_INTERVAL    10      // 系统状态报告间隔（10秒）
 #define BSP_POWER_STATUS_REPORT_INTERVAL    30      // 电源状态报告间隔（30秒）
-#define BSP_NETWORK_ANIMATION_STATUS_INTERVAL 60    // 网络动画状态报告间隔（60秒）
+#define BSP_NETWORK_STATUS_REPORT_INTERVAL 60    // 网络状态报告间隔（60秒）
 
 // 动画更新任务句柄
 static TaskHandle_t animation_task_handle = NULL;
@@ -176,12 +181,38 @@ esp_err_t bsp_board_init(void) {
     if (ret != ESP_OK) {        ESP_LOGE(TAG, "BSP配置验证失败");
         return ret;
     }
+      // ============ 第一阶段：Touch WS2812立即启动，提供上电指示 ============
+    ESP_LOGI(TAG, "第一阶段：优先启动Touch WS2812作为上电指示");
     
-    // ============ 第一阶段：LED矩阵优先初始化和基础硬件 ============
-    ESP_LOGI(TAG, "第一阶段：LED矩阵优先初始化和基础硬件");
+    // 最优先：初始化Touch WS2812显示系统，立即提供上电成功指示
+    ret = bsp_ws2812_init(BSP_WS2812_TOUCH);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Touch WS2812初始化失败: %s", esp_err_to_name(ret));
+        return ret;
+    }
     
-    // 最优先：初始化LED矩阵服务，提供早期状态指示
-    ESP_LOGI(TAG, "优先初始化LED矩阵服务");
+    // 立即初始化Touch WS2812显示控制器
+    ESP_LOGI(TAG, "立即启动Touch WS2812显示控制器，提供上电成功指示");
+    ret = bsp_touch_ws2812_display_init(NULL);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Touch WS2812显示控制器初始化失败: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    
+    // 立即启动Touch WS2812显示任务
+    ret = bsp_touch_ws2812_display_start();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Touch WS2812显示任务启动失败: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    
+    ESP_LOGI(TAG, "Touch WS2812上电指示灯已启动（白色常亮表示系统正常上电）");
+    
+    // ============ 第二阶段：LED矩阵和基础硬件初始化 ============
+    ESP_LOGI(TAG, "第二阶段：LED矩阵和基础硬件初始化");
+    
+    // 初始化LED矩阵服务，提供系统状态指示
+    ESP_LOGI(TAG, "初始化LED矩阵服务");
     bsp_init_led_matrix_service();
     
     // 启用LED矩阵动画任务
@@ -191,7 +222,7 @@ esp_err_t bsp_board_init(void) {
     } else {
         ESP_LOGI(TAG, "LED矩阵动画任务已启动，可提供早期状态指示");
     }
-    
+
     // 初始化电源管理模块
     bsp_power_init();
     
@@ -235,70 +266,91 @@ esp_err_t bsp_board_init(void) {
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "板载WS2812初始化失败: %s", esp_err_to_name(ret));
         return ret;
-    }
-    
-    // 初始化触摸WS2812
-    ret = bsp_ws2812_init(BSP_WS2812_TOUCH);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "触摸WS2812初始化失败: %s", esp_err_to_name(ret));
-        return ret;
-    }
-      // 板载WS2812测试 - 可选（已优化为跳过以减少初始化时间）
+    }    // 注释掉板载WS2812测试，避免冲突
     // bsp_ws2812_onboard_test();
     // ESP_LOGI("MAIN", "板载WS2812测试完成");
     
-    // 触摸WS2812测试 - 优化为快速验证
-    ESP_LOGI(TAG, "执行快速WS2812验证");
-    // bsp_ws2812_touch_test(); // 注释掉耗时的完整测试
-    // 替换为快速验证
-    esp_err_t ws2812_verify = bsp_ws2812_set_pixel(BSP_WS2812_TOUCH, 0, 50, 50, 50);
-    if (ws2812_verify == ESP_OK) {
-        bsp_ws2812_refresh(BSP_WS2812_TOUCH);
-        ESP_LOGI("MAIN", "触摸WS2812快速验证完成");
+    // Touch WS2812 将由显示控制器进行管理，这里不进行额外设置
+    ESP_LOGI("MAIN", "触摸WS2812将由显示控制器统一管理");
+    // ============ 第四阶段：持续监测和高级服务初始化（使用统一接口） ============
+    ESP_LOGI(TAG, "第四阶段：初始化持续监测和高级服务（使用统一状态接口）");
+      // 首先初始化状态管理器（统一状态接口的依赖）
+    ESP_LOGI(TAG, "初始化状态管理器");
+    ret = bsp_state_manager_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "状态管理器初始化失败: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    
+    // 初始化显示控制器（状态接口的依赖）
+    ESP_LOGI(TAG, "初始化显示控制器");
+    ret = bsp_display_controller_init(NULL);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "显示控制器初始化失败: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    
+    // 初始化统一状态接口
+    ESP_LOGI(TAG, "初始化统一状态接口");
+    ret = bsp_status_interface_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "统一状态接口初始化失败: %s", esp_err_to_name(ret));
+        return ret;
+    }
+      // 初始化网络适配器
+    ESP_LOGI(TAG, "初始化网络适配器");
+    ret = bsp_network_adapter_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "网络适配器初始化失败: %s", esp_err_to_name(ret));
+        return ret;
+    }
+      // 设置启动状态指示（使用LED动画接口）
+    esp_err_t led_ret = led_animation_select(1); // 选择启动动画（索引1）
+    if (led_ret == ESP_OK) {
+        ESP_LOGI(TAG, "已设置启动状态指示动画");
     } else {
-        ESP_LOGW("MAIN", "触摸WS2812验证失败，但继续初始化");
-    }// ============ 第四阶段：持续监测和高级服务初始化 ============
-    ESP_LOGI(TAG, "第四阶段：初始化持续监测和高级服务");
-    
-    // 初始化系统状态控制器（新的扩展状态分类系统）
-    ESP_LOGI(TAG, "初始化系统状态控制器");
-    ret = bsp_system_state_init();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "系统状态控制器初始化失败: %s", esp_err_to_name(ret));
-        return ret;
+        ESP_LOGW(TAG, "设置启动状态指示动画失败: %s", esp_err_to_name(led_ret));
     }
-    
-    // 初始化网络动画控制器（兼容模式）
-    ESP_LOGI(TAG, "初始化网络动画控制器（兼容模式）");
-    ret = bsp_network_animation_init();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "网络动画控制器初始化失败: %s", esp_err_to_name(ret));
-        return ret;
-    }
-    
-    // 设置启动动画，等待网络监控系统启动
-    bsp_network_animation_set_startup();
-    ESP_LOGI(TAG, "已设置启动动画，等待网络监控系统启动");
     
     // 启动BSP电源芯片UART通信测试
-    bsp_power_test_start();
+    bsp_power_test_start();// ============ 第五阶段：启动持续监测服务（使用统一接口） ============
+    ESP_LOGI(TAG, "第五阶段：启动持续监测服务（使用统一状态接口）");
     
-    // ============ 第五阶段：启动持续监测服务 ============
-    ESP_LOGI(TAG, "第五阶段：启动持续监测服务");
-      // 等待网络监控系统收集初始数据 (优化: 减少等待时间)
-    ESP_LOGI(TAG, "等待网络监控系统收集初始数据... (优化等待时间)");
+    // 等待网络监控系统收集初始数据
+    ESP_LOGI(TAG, "等待网络监控系统收集初始数据...");
     vTaskDelay(pdMS_TO_TICKS(BSP_INIT_DELAY_SYSTEM_MONITOR_MS));
     
-    // 开始网络状态与动画联动监控 (优化: 异步启动)
-    ESP_LOGI(TAG, "开始网络状态与动画联动监控");
-    bsp_network_animation_start_monitoring();
-    
-    // 启动系统状态监控 (优化: 并行启动)
-    ESP_LOGI(TAG, "启动系统状态监控");
-    bsp_system_state_start_monitoring();
+    // 启动统一状态接口服务
+    ESP_LOGI(TAG, "启动统一状态接口服务");
+    ret = bsp_status_interface_start();
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "统一状态接口启动失败，但继续运行: %s", esp_err_to_name(ret));
+    }
+      // 启动网络状态适配器
+    ESP_LOGI(TAG, "启动网络状态适配器");
+    ret = bsp_network_adapter_start();
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "网络适配器启动失败，但继续运行: %s", esp_err_to_name(ret));
+    }
+      // 启动统一显示控制器（Touch WS2812已在第一阶段启动）
+    ESP_LOGI(TAG, "启动统一显示控制器");
+    ret = bsp_display_controller_start();
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "统一显示控制器启动失败，但继续运行: %s", esp_err_to_name(ret));
+    } else {
+        ESP_LOGI(TAG, "统一显示控制器启动成功");
+    }
     
     // 显示BSP电源系统状态
     bsp_power_system_status_show();
+    
+    ESP_LOGI(TAG, "========== BSP架构说明（优化版） ==========");
+    ESP_LOGI(TAG, "系统采用统一状态接口架构：");
+    ESP_LOGI(TAG, "  1. bsp_status_interface - 统一状态查询和控制");
+    ESP_LOGI(TAG, "  2. bsp_network_adapter - 简化的网络状态输入");
+    ESP_LOGI(TAG, "  3. network_monitor - 底层网络监控");
+    ESP_LOGI(TAG, "简化的接口设计，更易使用和维护");
+    ESP_LOGI(TAG, "========================================");
       // 记录初始化完成时间和统计信息
     uint32_t init_end_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
     bsp_stats.init_duration_ms = init_end_time - bsp_stats.init_start_time;
@@ -322,19 +374,17 @@ esp_err_t bsp_board_init(void) {
 // BSP应用主循环函数
 void bsp_board_run_main_loop(void) {
     ESP_LOGI(TAG, "进入BSP应用主循环");
-    
-    int power_status_counter = 0;
+      int power_status_counter = 0;
     int system_state_counter = 0;
-    int network_animation_status_counter = 0;
+    int network_status_counter = 0;
     int performance_stats_counter = 0;
     int health_check_counter = 0;
     
     while (1) {
         vTaskDelay(BSP_MAIN_LOOP_INTERVAL_MS / portTICK_PERIOD_MS);
-        
-        power_status_counter++;
+          power_status_counter++;
         system_state_counter++;
-        network_animation_status_counter++;
+        network_status_counter++;
         performance_stats_counter++;
         health_check_counter++;
         
@@ -342,11 +392,10 @@ void bsp_board_run_main_loop(void) {
         if (performance_stats_counter >= 5) {
             bsp_board_update_performance_stats();
             performance_stats_counter = 0;
-        }
-        
-        // 每10秒更新一次系统状态
+        }        // 每10秒进行统一系统状态报告
         if (system_state_counter >= BSP_SYSTEM_STATE_REPORT_INTERVAL) {
-            bsp_system_state_update_and_report();
+            ESP_LOGI(TAG, "定期系统状态报告（统一接口）");
+            bsp_print_system_status_report();
             system_state_counter = 0;
         }
         
@@ -354,12 +403,10 @@ void bsp_board_run_main_loop(void) {
         if (power_status_counter >= BSP_POWER_STATUS_REPORT_INTERVAL) {
             bsp_power_system_status_show();
             power_status_counter = 0;
-        }
-        
-        // 每60秒显示一次网络动画控制器状态
-        if (network_animation_status_counter >= BSP_NETWORK_ANIMATION_STATUS_INTERVAL) {
-            bsp_network_animation_print_status();
-            network_animation_status_counter = 0;
+        }        // 每60秒显示一次网络状态摘要
+        if (network_status_counter >= BSP_NETWORK_STATUS_REPORT_INTERVAL) {
+            bsp_network_adapter_print_status();
+            network_status_counter = 0;
         }
         
         // 每120秒进行健康检查和性能统计报告
@@ -372,15 +419,17 @@ void bsp_board_run_main_loop(void) {
     }
 }
 
-// BSP清理函数
+// BSP清理函数（使用统一接口）
 esp_err_t bsp_board_cleanup(void) {
-    ESP_LOGI(TAG, "开始清理BSP资源");
+    ESP_LOGI(TAG, "开始清理BSP资源（使用统一状态接口）");
     
     // 停止动画任务
     bsp_stop_animation_task();
     
-    // 停止系统状态监控
-    bsp_system_state_stop();
+    // 停止统一状态接口服务
+    ESP_LOGI(TAG, "停止统一状态接口和网络适配器");
+    bsp_status_interface_stop();
+    bsp_network_adapter_stop();
     
     // 停止网络监控
     nm_stop_monitoring();

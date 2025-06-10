@@ -61,7 +61,7 @@ void bsp_orin_init(void) {
     gpio_config(&io_conf);
     
     gpio_set_level(BSP_ORIN_RESET_PIN, 0); // 默认不复位
-    gpio_set_level(BSP_ORIN_POWER_PIN, 0); // 持续拉高保持开启
+    gpio_set_level(BSP_ORIN_POWER_PIN, 0); // 持续低电平，通过NPN拉高Orin引脚保持开启
     
     ESP_LOGI(TAG, "ORIN电源控制初始化完成");
 }
@@ -560,4 +560,116 @@ esp_err_t bsp_get_power_chip_data_status(bool *is_valid, uint32_t *age_seconds) 
     }
     
     return ESP_OK;
+}
+
+/**
+ * @brief BSP电源芯片数据测试任务
+ * 演示基于电压变化触发的电源协商读取方式
+ * 注意：避免主动频繁调用bsp_get_power_chip_data()以防止持续读取XSP16数据
+ */
+static void power_chip_test_task(void *pvParameters) {
+    ESP_LOGI(TAG, "电源芯片数据测试任务启动");
+    ESP_LOGI(TAG, "测试演示基于电压变化触发的电源协商机制");
+    
+    while (1) {
+        // 等待更长时间，避免频繁查询
+        vTaskDelay(pdMS_TO_TICKS(30000)); // 30秒检查一次
+        
+        // 获取缓存的协商数据（推荐方式）
+        const bsp_power_chip_data_t* cached_data = bsp_get_latest_power_chip_data();
+        
+        if (cached_data != NULL && cached_data->valid) {
+            uint32_t data_age_ms = esp_log_timestamp() - cached_data->timestamp;
+            ESP_LOGI(TAG, "缓存的电源芯片数据:");
+            ESP_LOGI(TAG, "  电压: %.2fV, 电流: %.3fA, 功率: %.2fW", 
+                     cached_data->voltage, cached_data->current, cached_data->power);
+            ESP_LOGI(TAG, "  数据年龄: %lu毫秒", data_age_ms);
+            
+            // 检查数据是否需要更新（基于电压变化）
+            if (check_voltage_change()) {
+                ESP_LOGI(TAG, "检测到电压变化，建议触发新的协商");
+                // perform_power_chip_negotiation(); // 可选：自动触发协商
+            }
+        } else {
+            ESP_LOGW(TAG, "缓存数据无效，可能需要触发协商");
+        }
+        
+        // 每5分钟显示一次完整的电源系统状态
+        static int status_counter = 0;
+        if (++status_counter >= 10) { // 30秒 * 10 = 5分钟
+            bsp_power_system_status_show();
+            status_counter = 0;
+        }
+    }
+}
+
+/**
+ * @brief 启动BSP电源芯片测试
+ * 调用此函数来启动基于电压变化触发的电源芯片协商测试
+ */
+void bsp_power_test_start(void) {
+    ESP_LOGI(TAG, "启动BSP电源芯片测试任务");
+    
+    // 创建测试任务
+    BaseType_t ret = xTaskCreate(
+        power_chip_test_task,
+        "power_chip_test",
+        4096,
+        NULL,
+        3, // 较低优先级
+        NULL
+    );
+    
+    if (ret == pdPASS) {
+        ESP_LOGI(TAG, "电源芯片测试任务创建成功");
+    } else {
+        ESP_LOGE(TAG, "电源芯片测试任务创建失败");
+    }
+}
+
+/**
+ * @brief 显示BSP电源系统状态
+ * 综合显示主电源、辅助电源和电源芯片的状态信息
+ */
+void bsp_power_system_status_show(void) {
+    ESP_LOGI(TAG, "=== BSP电源系统状态 ===");
+    
+    // 获取主电源和辅助电源状态
+    float main_voltage, aux_voltage;
+    esp_err_t ret = bsp_get_power_status(&main_voltage, &aux_voltage);
+    
+    if (ret == ESP_OK) {
+        ESP_LOGI(TAG, "主电源电压: %.2fV", main_voltage);
+        ESP_LOGI(TAG, "辅助电源电压: %.2fV", aux_voltage);
+    } else {
+        ESP_LOGE(TAG, "获取电源状态失败");
+    }
+    
+    // 获取电源芯片协商数据
+    const bsp_power_chip_data_t* chip_data = bsp_get_latest_power_chip_data();
+    if (chip_data != NULL && chip_data->valid) {
+        uint32_t data_age_ms = esp_log_timestamp() - chip_data->timestamp;
+        ESP_LOGI(TAG, "电源芯片协商数据:");
+        ESP_LOGI(TAG, "  电压: %.2fV", chip_data->voltage);
+        ESP_LOGI(TAG, "  电流: %.3fA", chip_data->current);
+        ESP_LOGI(TAG, "  功率: %.2fW", chip_data->power);
+        ESP_LOGI(TAG, "  协商时刻: 系统运行第%lu毫秒", chip_data->timestamp);
+        ESP_LOGI(TAG, "  数据年龄: %lu毫秒前", data_age_ms);
+    } else {
+        ESP_LOGW(TAG, "电源芯片协商数据无效");
+        
+        // 显示详细的数据状态信息
+        bool is_valid;
+        uint32_t age_seconds;
+        esp_err_t status_ret = bsp_get_power_chip_data_status(&is_valid, &age_seconds);
+        if (status_ret == ESP_OK) {
+            if (!is_valid) {
+                ESP_LOGI(TAG, "  状态: 数据无效（尚未进行协商）");
+            } else {
+                ESP_LOGI(TAG, "  状态: 数据有效，年龄: %lu 秒", age_seconds);
+            }
+        }
+    }
+    
+    ESP_LOGI(TAG, "======================");
 }

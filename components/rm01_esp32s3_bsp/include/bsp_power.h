@@ -154,6 +154,19 @@ void bsp_lpn100_reset(void);
  */
 esp_err_t bsp_get_power_status(float *main_voltage, float *aux_voltage);
 
+/**
+ * @brief 启动BSP电源芯片测试
+ * 调用此函数来启动基于电压变化触发的电源芯片协商测试
+ * @note 创建测试任务，演示电源协商机制的使用方式
+ */
+void bsp_power_test_start(void);
+
+/**
+ * @brief 显示BSP电源系统状态
+ * 综合显示主电源、辅助电源和电源芯片的状态信息
+ */
+void bsp_power_system_status_show(void);
+
 #ifdef __cplusplus
 }
 #endif

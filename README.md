@@ -53,12 +53,14 @@ rm01-bsp/
 │   │   └── src/
 │   └── rm01_esp32s3_bsp/        # BSP硬件抽象层
 │       ├── include/             # BSP公共头文件
-│       │   ├── bsp_system_state.h
+│       │   ├── bsp_state_manager.h     # 状态管理器
+│       │   ├── bsp_display_controller.h # 显示控制器
 │       │   ├── bsp_network_animation.h
 │       │   ├── bsp_power_test.h
 │       │   └── ...
 │       ├── src/                 # BSP核心实现
-│       │   ├── bsp_system_state.c      # 系统状态控制
+│       │   ├── bsp_state_manager.c     # 系统状态检测与管理
+│       │   ├── bsp_display_controller.c # LED显示控制
 │       │   ├── bsp_network_animation.c # 网络动画联动
 │       │   ├── bsp_power_test.c        # 电源芯片测试
 │       │   └── ...
@@ -155,7 +157,8 @@ python tools/verify_animation_data.py
 
 #### BSP硬件抽象层 (components/rm01_esp32s3_bsp/)
 - 完整的硬件抽象
-- 系统状态管理: `bsp_system_state_*`
+- 系统状态管理: `bsp_state_manager_*`
+- 显示控制: `bsp_display_controller_*`
 - 网络动画联动: `bsp_network_animation_*`
 - 电源测试功能: `bsp_power_test_*`
 

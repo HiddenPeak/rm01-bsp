@@ -11,11 +11,10 @@
 #include "ethernet_init.h"
 #include "bsp_webserver.h" // 添加Webserver头文件引用
 #include "network_monitor.h" // 引入网络监控头文件
-#include "bsp_power.h" // 引入电源管理头文件
+#include "bsp_power.h" // 引入电源管理头文件（包含测试功能）
 #include "bsp_ws2812.h" // 引入WS2812模块头文件
-#include "bsp_system_state.h" // 引入系统状态控制器头文件
-#include "bsp_network_animation.h" // 引入网络动画控制器头文件
-#include "bsp_power_test.h" // 引入电源测试头文件
+#include "bsp_state_manager.h" // 引入状态管理器头文件
+#include "bsp_display_controller.h" // 引入显示控制器头文件
 #include "led_matrix.h" // 引入LED矩阵头文件
 #include "esp_log.h" // 引入日志系统头文件
 #include "esp_err.h" // 引入ESP错误类型头文件
@@ -99,7 +98,6 @@ esp_err_t bsp_init_webserver_service(void);
 esp_err_t bsp_start_animation_task(void);
 void bsp_stop_animation_task(void);
 
-// 保留旧的网络监控接口（重定向到network_monitor模块）
-void bsp_start_ping_test(void); // 保留旧的接口，重定向到nm_start_network_monitor
+// 网络监控功能已迁移到 network_monitor 模块，请直接使用该模块的接口
 
 #endif

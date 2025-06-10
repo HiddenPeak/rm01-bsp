@@ -104,29 +104,6 @@ void nm_print_status_all(void);
 // 注册网络状态变化回调
 void nm_register_status_change_callback(nm_status_change_cb_t callback, void* arg);
 
-// 高实时性监控接口
-void nm_enable_fast_monitoring(bool enable);  // 启用/禁用快速监控模式
-void nm_set_monitoring_interval(uint32_t interval_ms);  // 设置监控间隔
-bool nm_is_fast_mode_enabled(void);  // 检查是否启用快速模式
-
-// 自适应监控接口
-void nm_enable_adaptive_monitoring(bool enable);  // 启用/禁用自适应监控
-void nm_enable_network_quality_monitoring(bool enable);  // 启用/禁用网络质量监控
-bool nm_is_adaptive_mode_enabled(void);  // 检查是否启用自适应监控
-
-// 性能统计接口
-typedef struct {
-    uint32_t total_pings;
-    uint32_t successful_pings; 
-    uint32_t failed_pings;
-    uint32_t avg_response_time;
-    uint32_t monitoring_cycles;
-    uint32_t state_changes;
-} nm_performance_stats_t;
-
-void nm_get_performance_stats(nm_performance_stats_t* stats);  // 获取性能统计
-void nm_reset_performance_stats(void);  // 重置性能统计
-
 // BSP兼容接口函数
 const network_target_t* nm_get_network_targets(void);
 void nm_start_network_monitor(void);
@@ -135,10 +112,6 @@ void nm_get_network_status(void);
 
 // 获取网络事件组句柄，可用于等待特定网络事件
 EventGroupHandle_t nm_get_event_group(void);
-
-// 并发监控优化接口
-void nm_enable_concurrent_monitoring(bool enable);  // 启用/禁用并发监控模式
-bool nm_is_concurrent_mode_enabled(void);          // 检查是否启用并发模式
 
 // 无锁状态查询接口（高性能）
 nm_status_t nm_get_status_lockfree(const char* ip);
@@ -153,10 +126,17 @@ typedef struct {
     bool enable_smart_scheduling;       // 启用智能调度
 } nm_advanced_config_t;
 
-void nm_set_advanced_config(const nm_advanced_config_t* config);
-void nm_get_advanced_config(nm_advanced_config_t* config);
+// 性能统计接口
+typedef struct {
+    uint32_t total_pings;
+    uint32_t successful_pings; 
+    uint32_t failed_pings;
+    uint32_t avg_response_time;
+    uint32_t monitoring_cycles;
+    uint32_t state_changes;
+} nm_performance_stats_t;
 
-// 性能监控接口
+// 性能指标接口
 typedef struct {
     uint32_t avg_ping_time;             // 平均ping时间
     uint32_t lock_contention_count;     // 锁竞争次数
@@ -165,7 +145,39 @@ typedef struct {
     uint32_t prediction_accuracy;       // 预测准确率(%)
 } nm_performance_metrics_t;
 
-void nm_get_performance_metrics(nm_performance_metrics_t* metrics);
-void nm_reset_performance_metrics(void);
+// ============================================================================
+// 标准化接口 (BSP重构第二阶段) - 2025年6月10日
+// ============================================================================
+
+// 配置接口 (nm_config_*) - 统一配置管理
+// 监控模式配置
+void nm_config_set_fast_mode(bool enable);                 // 设置快速监控模式
+void nm_config_set_adaptive_mode(bool enable);             // 设置自适应监控模式
+void nm_config_set_concurrent_mode(bool enable);           // 设置并发监控模式
+void nm_config_set_quality_monitor(bool enable);           // 设置质量监控模式
+
+// 参数配置
+void nm_config_set_interval(uint32_t interval_ms);         // 设置监控间隔
+esp_err_t nm_config_set_advanced(const nm_advanced_config_t* config);  // 设置高级配置
+
+// 状态查询
+bool nm_config_is_fast_mode_enabled(void);                 // 检查快速模式状态
+bool nm_config_is_adaptive_mode_enabled(void);             // 检查自适应模式状态
+bool nm_config_is_concurrent_mode_enabled(void);           // 检查并发模式状态
+void nm_config_get_advanced(nm_advanced_config_t* config); // 获取高级配置
+
+// 性能接口 (nm_perf_*) - 统一性能监控
+// 统计数据管理
+void nm_perf_get_stats(nm_performance_stats_t* stats);     // 获取性能统计
+void nm_perf_reset_stats(void);                            // 重置性能统计
+
+// 指标数据管理
+void nm_perf_get_metrics(nm_performance_metrics_t* metrics); // 获取性能指标
+void nm_perf_reset_metrics(void);                          // 重置性能指标
+
+// 实时性能监控
+uint32_t nm_perf_get_current_latency(const char* ip);      // 获取指定IP当前延迟
+float nm_perf_get_packet_loss_rate(const char* ip);        // 获取指定IP丢包率
+uint32_t nm_perf_get_uptime_percent(const char* ip);       // 获取指定IP可用性百分比
 
 #endif // NETWORK_MONITOR_H
