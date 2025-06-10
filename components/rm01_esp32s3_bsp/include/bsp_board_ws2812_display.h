@@ -45,13 +45,14 @@ typedef enum {
 
 // ========== 监控阈值定义 ==========
 
-// 温度阈值
-#define BOARD_TEMP_THRESHOLD_HIGH        85.0f   // 高温阈值 (°C)
-#define BOARD_TEMP_THRESHOLD_RECOVERY    80.0f   // 温度恢复阈值 (°C，滞回)
+// 温度阈值 - 根据用户需求调整
+#define BOARD_TEMP_THRESHOLD_HIGH_N305   95.0f   // N305高温阈值 (°C)
+#define BOARD_TEMP_THRESHOLD_HIGH_JETSON 80.0f   // Jetson高温阈值 (°C)
+#define BOARD_TEMP_THRESHOLD_RECOVERY    75.0f   // 温度恢复阈值 (°C，滞回)
 
-// Jetson功率阈值 (替代GPU使用率)
-#define BOARD_POWER_THRESHOLD_HIGH       15000.0f   // 高功率阈值 (mW，15W)
-#define BOARD_POWER_THRESHOLD_RECOVERY   12000.0f   // 功率恢复阈值 (mW，12W)
+// Jetson功率阈值 - 根据用户需求调整为45W
+#define BOARD_POWER_THRESHOLD_HIGH       45000.0f   // 高功率阈值 (mW，45W)
+#define BOARD_POWER_THRESHOLD_RECOVERY   40000.0f   // 功率恢复阈值 (mW，40W)
 
 // 内存使用率阈值
 #define BOARD_MEMORY_USAGE_THRESHOLD     90.0f   // 内存高使用率阈值 (%)

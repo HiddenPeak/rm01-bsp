@@ -307,12 +307,9 @@ esp_err_t bsp_set_display_mode(bool manual_mode) {
         return ESP_ERR_INVALID_STATE;
     }
     
-    if (manual_mode) {
-        bsp_display_controller_resume_auto();
-    } else {
-        // 对于手动模式，我们不直接调用显示控制器，而是发布事件
-        publish_system_event(BSP_EVENT_DISPLAY_CHANGED, &manual_mode, sizeof(bool), "status_interface");
-    }
+    // 注意：LED Matrix现在独立管理Logo显示，不再通过display controller
+    // 这里只发布事件通知其他组件显示模式的变化
+    publish_system_event(BSP_EVENT_DISPLAY_CHANGED, &manual_mode, sizeof(bool), "status_interface");
     
     return ESP_OK;
 }
@@ -322,13 +319,11 @@ esp_err_t bsp_set_animation(int animation_index) {
         return ESP_ERR_INVALID_STATE;
     }
     
-    esp_err_t ret = bsp_display_controller_set_animation((display_animation_index_t)animation_index);
+    // 注意：LED Matrix现在独立管理Logo显示，animation设置已移至led_matrix_logo_display
+    // 这里只发布事件通知动画索引的变化
+    publish_system_event(BSP_EVENT_DISPLAY_CHANGED, &animation_index, sizeof(int), "status_interface");
     
-    if (ret == ESP_OK) {
-        publish_system_event(BSP_EVENT_DISPLAY_CHANGED, &animation_index, sizeof(int), "status_interface");
-    }
-    
-    return ret;
+    return ESP_OK;
 }
 
 esp_err_t bsp_force_status_refresh(void) {
@@ -569,20 +564,20 @@ static esp_err_t collect_display_status(display_control_status_t* display) {
     if (display == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    
-    // 获取显示控制器状态
+      // 获取显示控制器状态（只处理WS2812状态显示）
     display_controller_status_t controller_status;
     esp_err_t ret = bsp_display_controller_get_status(&controller_status);
     if (ret == ESP_OK) {
-        display->current_animation_index = controller_status.current_animation_index;
-        display->total_animation_switches = controller_status.total_switches;
-        display->last_animation_switch_time = controller_status.last_switch_time;
+        // 注意：animation相关字段已移除，只保留WS2812相关状态
         display->display_controller_active = controller_status.controller_active;
     }
     
+    // LED Matrix Logo Display状态（如果需要的话）
+    // 可以通过led_matrix_logo_display_get_status()获取
+    
     // 其他显示状态信息
-    display->manual_display_mode = false;  // TODO: 从显示控制器获取
-    display->auto_switch_enabled = true;   // TODO: 从显示控制器获取
+    display->manual_display_mode = false;  // TODO: 从LED Matrix Logo Display获取
+    display->auto_switch_enabled = true;   // TODO: 从LED Matrix Logo Display获取
     
     return ESP_OK;
 }

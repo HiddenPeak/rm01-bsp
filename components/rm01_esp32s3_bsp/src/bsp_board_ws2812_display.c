@@ -42,7 +42,8 @@ typedef struct {
 
 // 预定义颜色 - Board WS2812专用于系统状态监控
 static const rgb_color_t COLOR_RED = {255, 0, 0};      // 红色 - 高温警告
-static const rgb_color_t COLOR_PURPLE = {128, 0, 128}; // 紫色 - GPU/内存警告
+static const rgb_color_t COLOR_PURPLE = {128, 0, 128}; // 紫色 - 功率警告
+static const rgb_color_t COLOR_WHITE = {255, 255, 255}; // 白色 - 内存警告
 static const rgb_color_t COLOR_OFF = {0, 0, 0};        // 关闭
 
 // ========== 显示控制器状态结构 ==========
@@ -93,15 +94,10 @@ static uint32_t get_time_ms(void);
 static uint8_t apply_brightness(uint8_t color_value, uint8_t brightness);
 
 // Prometheus数据解析相关
-static esp_err_t fetch_prometheus_metrics(const char* url, char* response_buffer, size_t buffer_size);
 static esp_err_t fetch_n305_temperature(system_metrics_t* metrics);
 static esp_err_t fetch_jetson_metrics(system_metrics_t* metrics);
 static esp_err_t query_prometheus_api(const char* base_url, const char* query, char* response_buffer, size_t buffer_size);
 static esp_err_t parse_prometheus_query_response(const char* response, float* value);
-static esp_err_t parse_n305_metrics(const char* data, system_metrics_t* metrics);
-static esp_err_t parse_jetson_metrics(const char* data, system_metrics_t* metrics);
-static float extract_metric_value(const char* data, const char* metric_name);
-static esp_err_t http_event_handler(esp_http_client_event_t *evt);
 
 // ========== 核心接口实现 ==========
 
@@ -468,11 +464,10 @@ esp_err_t bsp_board_ws2812_display_update_metrics(void) {
     // 获取Jetson数据 - 同样使用Prometheus查询API
     ESP_LOGI(TAG, "正在获取Jetson监控数据...");
     jetson_result = fetch_jetson_metrics(&new_metrics);
-    
-    if (jetson_result == ESP_OK) {
-        ESP_LOGI(TAG, "Jetson监控数据获取成功: CPU=%.1f°C, GPU=%.1f°C/%.1f%%, 内存=%.1f%%", 
+      if (jetson_result == ESP_OK) {
+        ESP_LOGI(TAG, "Jetson监控数据获取成功: CPU=%.1f°C, GPU=%.1f°C, 功率=%.1fmW(%.2fW), 内存=%.1f%%", 
                  new_metrics.jetson_cpu_temp, new_metrics.jetson_gpu_temp, 
-                 new_metrics.jetson_power_mw, new_metrics.jetson_memory_usage);
+                 new_metrics.jetson_power_mw, new_metrics.jetson_power_mw/1000.0f, new_metrics.jetson_memory_usage);
     } else {
         ESP_LOGW(TAG, "Jetson数据获取失败");
     }
@@ -595,22 +590,22 @@ static board_display_mode_t determine_display_mode(void) {
     if (bsp_board_ws2812_display_get_metrics(&metrics) != ESP_OK) {
         return BOARD_DISPLAY_MODE_OFF;
     }
-    
-    // 基于优先级的模式选择
-    // 1. 高优先级：高温警告
-    if (metrics.n305_data_valid && metrics.n305_cpu_temp >= BOARD_TEMP_THRESHOLD_HIGH) {
+      // 基于优先级的模式选择
+    // 1. 高优先级：高温警告 - N305和Jetson使用不同阈值
+    if (metrics.n305_data_valid && metrics.n305_cpu_temp >= BOARD_TEMP_THRESHOLD_HIGH_N305) {
         if (s_controller.config.debug_mode) {
-            ESP_LOGI(TAG, "检测到N305高温: %.1f°C >= %.1f°C", metrics.n305_cpu_temp, BOARD_TEMP_THRESHOLD_HIGH);
+            ESP_LOGI(TAG, "检测到N305高温: %.1f°C >= %.1f°C", 
+                     metrics.n305_cpu_temp, BOARD_TEMP_THRESHOLD_HIGH_N305);
         }
         return BOARD_DISPLAY_MODE_HIGH_TEMP;
     }
     
     if (metrics.jetson_data_valid && 
-        (metrics.jetson_cpu_temp >= BOARD_TEMP_THRESHOLD_HIGH || 
-         metrics.jetson_gpu_temp >= BOARD_TEMP_THRESHOLD_HIGH)) {
+        (metrics.jetson_cpu_temp >= BOARD_TEMP_THRESHOLD_HIGH_JETSON || 
+         metrics.jetson_gpu_temp >= BOARD_TEMP_THRESHOLD_HIGH_JETSON)) {
         if (s_controller.config.debug_mode) {
             ESP_LOGI(TAG, "检测到Jetson高温: CPU=%.1f°C, GPU=%.1f°C >= %.1f°C", 
-                     metrics.jetson_cpu_temp, metrics.jetson_gpu_temp, BOARD_TEMP_THRESHOLD_HIGH);
+                     metrics.jetson_cpu_temp, metrics.jetson_gpu_temp, BOARD_TEMP_THRESHOLD_HIGH_JETSON);
         }
         return BOARD_DISPLAY_MODE_HIGH_TEMP;
     }
@@ -645,10 +640,9 @@ static void execute_display_mode(board_display_mode_t mode) {
             // 功率过高 - 紫色快速呼吸
             handle_breath_animation(&COLOR_PURPLE, BOARD_BREATH_SPEED_FAST);
             break;
-            
-        case BOARD_DISPLAY_MODE_MEMORY_HIGH_USAGE:
-            // 内存高使用率 - 紫色慢速呼吸
-            handle_breath_animation(&COLOR_PURPLE, BOARD_BREATH_SPEED_SLOW);
+              case BOARD_DISPLAY_MODE_MEMORY_HIGH_USAGE:
+            // 内存高使用率 - 白色慢速呼吸
+            handle_breath_animation(&COLOR_WHITE, BOARD_BREATH_SPEED_SLOW);
             break;
             
         case BOARD_DISPLAY_MODE_OFF:
@@ -724,125 +718,6 @@ static uint8_t apply_brightness(uint8_t color_value, uint8_t brightness) {
 
 // ========== Prometheus数据处理实现 ==========
 
-static esp_err_t fetch_prometheus_metrics(const char* url, char* response_buffer, size_t buffer_size) {
-    // 先检查网络连接状态
-    bool network_available = false;
-    const char* target_ip = NULL;
-    
-    // 从URL中提取IP地址用于网络状态检查
-    if (strstr(url, "10.10.99.99") != NULL) {
-        target_ip = "10.10.99.99";  // N305应用模块
-    } else if (strstr(url, "10.10.99.98") != NULL) {
-        target_ip = "10.10.99.98";  // Jetson算力模块
-    }
-    
-    // 检查网络连接状态
-    if (target_ip != NULL) {
-        nm_status_t status = nm_get_status(target_ip);
-        network_available = (status == NM_STATUS_UP);
-        
-        if (s_controller.config.debug_mode) {
-            ESP_LOGI(TAG, "网络状态检查: %s -> %s", target_ip, 
-                     network_available ? "可达" : "不可达");
-        }
-        
-        if (!network_available) {
-            ESP_LOGW(TAG, "目标设备不可达: %s，跳过HTTP请求", target_ip);
-            return ESP_ERR_NOT_FOUND;  // 使用更明确的错误码
-        }
-    }
-    
-    esp_http_client_config_t config = {
-        .url = url,
-        .timeout_ms = BOARD_HTTP_TIMEOUT_MS,
-        .buffer_size = 1024,        // 较小的缓冲区以节省内存
-        .buffer_size_tx = 512,      // 发送缓冲区
-        .disable_auto_redirect = true,
-        .max_redirection_count = 0,
-        .keep_alive_enable = false, // 不保持连接以节省资源
-    };
-    
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if (client == NULL) {
-        ESP_LOGE(TAG, "创建HTTP客户端失败");
-        return ESP_FAIL;
-    }
-    
-    // 清空响应缓冲区
-    memset(response_buffer, 0, buffer_size);
-    
-    esp_err_t err = esp_http_client_open(client, 0);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "HTTP客户端打开失败: %s (目标: %s)", esp_err_to_name(err), target_ip ? target_ip : "未知");
-        esp_http_client_cleanup(client);
-        
-        // 如果是连接失败，可能是网络问题
-        if (err == ESP_ERR_HTTP_CONNECT) {
-            ESP_LOGW(TAG, "网络连接失败，建议检查:");
-            ESP_LOGW(TAG, "  1. 目标设备是否开机且网络正常");
-            ESP_LOGW(TAG, "  2. ESP32S3与目标设备网络连通性");
-            ESP_LOGW(TAG, "  3. Prometheus服务是否在正确端口运行");
-        }
-        
-        return err;
-    }
-    
-    int content_length = esp_http_client_fetch_headers(client);
-    int status_code = esp_http_client_get_status_code(client);
-    
-    if (status_code != 200) {
-        ESP_LOGE(TAG, "HTTP请求失败，状态码: %d, URL: %s", status_code, url);
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
-        return ESP_FAIL;
-    }
-    
-    if (s_controller.config.debug_mode) {
-        ESP_LOGI(TAG, "HTTP请求成功，内容长度: %d字节，目标: %s", content_length, target_ip ? target_ip : "未知");
-    }
-    
-    // 分块读取响应以避免内存不足
-    int total_read = 0;
-    int chunk_size = 512;  // 512字节块大小
-    
-    while (total_read < buffer_size - 1) {
-        int remaining = buffer_size - 1 - total_read;
-        int to_read = (remaining > chunk_size) ? chunk_size : remaining;
-        
-        int data_read = esp_http_client_read_response(client, 
-                                                      response_buffer + total_read, 
-                                                      to_read);
-        if (data_read <= 0) {
-            break;  // 读取完成或出错
-        }
-        
-        total_read += data_read;
-        
-        // 简单的进度指示 (仅调试模式)
-        if (s_controller.config.debug_mode && (total_read % 2048 == 0)) {
-            ESP_LOGI(TAG, "已读取: %d字节", total_read);
-        }
-    }
-    
-    if (total_read < 0) {
-        ESP_LOGE(TAG, "HTTP响应读取失败");
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
-        return ESP_FAIL;
-    }
-    
-    response_buffer[total_read] = '\0';  // 确保字符串结尾
-    
-    if (s_controller.config.debug_mode) {
-        ESP_LOGI(TAG, "HTTP响应读取完成，总计: %d字节，目标: %s", total_read, target_ip ? target_ip : "未知");
-    }
-    
-    esp_http_client_close(client);
-    esp_http_client_cleanup(client);
-    
-    return ESP_OK;
-}
-
 static esp_err_t fetch_n305_temperature(system_metrics_t* metrics) {
     ESP_LOGI(TAG, "使用Prometheus查询API获取N305温度数据");
     
@@ -862,18 +737,19 @@ static esp_err_t fetch_n305_temperature(system_metrics_t* metrics) {
         esp_err_t ret = query_prometheus_api(BOARD_PROMETHEUS_API, temp_queries[i], 
                                            s_controller.n305_response_buffer, 
                                            s_controller.buffer_size);
-        
-        if (ret == ESP_OK) {
+          if (ret == ESP_OK) {
             float temperature;
             ret = parse_prometheus_query_response(s_controller.n305_response_buffer, &temperature);
-            
-            if (ret == ESP_OK && temperature > 0 && temperature < 150) {  // 合理的温度范围
+              if (ret == ESP_OK && temperature > -50 && temperature < 150) {  // 温度合理范围
                 metrics->n305_cpu_temp = temperature;
                 metrics->n305_data_valid = true;
                 ESP_LOGI(TAG, "N305温度查询成功: %.1f°C (查询: %s)", temperature, temp_queries[i]);
                 return ESP_OK;
             } else if (ret == ESP_OK) {
-                ESP_LOGW(TAG, "温度值不合理: %.1f°C", temperature);
+                ESP_LOGW(TAG, "N305温度值不合理: %.1f°C (合理范围: -50°C到150°C)", temperature);
+                if (s_controller.config.debug_mode) {
+                    ESP_LOGW(TAG, "响应内容: %.200s", s_controller.n305_response_buffer);
+                }
             }
         }
         
@@ -895,12 +771,13 @@ static esp_err_t fetch_jetson_metrics(system_metrics_t* metrics) {
                                        s_controller.jetson_response_buffer, 
                                        s_controller.buffer_size);
     if (ret == ESP_OK) {
-        float cpu_temp;
-        if (parse_prometheus_query_response(s_controller.jetson_response_buffer, &cpu_temp) == ESP_OK) {
-            if (cpu_temp >= 0 && cpu_temp < 150) {
+        float cpu_temp;        if (parse_prometheus_query_response(s_controller.jetson_response_buffer, &cpu_temp) == ESP_OK) {
+            if (cpu_temp >= -50 && cpu_temp < 150) {  // 温度合理范围
                 metrics->jetson_cpu_temp = cpu_temp;
                 success = true;
                 ESP_LOGI(TAG, "Jetson CPU温度: %.1f°C", cpu_temp);
+            } else {
+                ESP_LOGW(TAG, "Jetson CPU温度值不合理: %.1f°C (合理范围: -50°C到150°C)", cpu_temp);
             }
         }
     }
@@ -911,12 +788,13 @@ static esp_err_t fetch_jetson_metrics(system_metrics_t* metrics) {
                              s_controller.jetson_response_buffer, 
                              s_controller.buffer_size);
     if (ret == ESP_OK) {
-        float gpu_temp;
-        if (parse_prometheus_query_response(s_controller.jetson_response_buffer, &gpu_temp) == ESP_OK) {
-            if (gpu_temp >= 0 && gpu_temp < 150 && gpu_temp != -256.0f) {  // -256.0表示传感器无效
+        float gpu_temp;        if (parse_prometheus_query_response(s_controller.jetson_response_buffer, &gpu_temp) == ESP_OK) {
+            if (gpu_temp >= -50 && gpu_temp < 150 && gpu_temp != -256.0f) {  // 温度合理范围，-256.0表示传感器无效
                 metrics->jetson_gpu_temp = gpu_temp;
                 success = true;
                 ESP_LOGI(TAG, "Jetson GPU温度: %.1f°C", gpu_temp);
+            } else {
+                ESP_LOGW(TAG, "Jetson GPU温度值不合理: %.1f°C (合理范围: -50°C到150°C)", gpu_temp);
             }
         }
     }
@@ -926,25 +804,34 @@ static esp_err_t fetch_jetson_metrics(system_metrics_t* metrics) {
     
     ret = query_prometheus_api(BOARD_PROMETHEUS_API, JETSON_POWER_QUERY, 
                              s_controller.jetson_response_buffer, 
-                             s_controller.buffer_size);
-    if (ret == ESP_OK) {
+                             s_controller.buffer_size);    if (ret == ESP_OK) {
         if (parse_prometheus_query_response(s_controller.jetson_response_buffer, &power_mw) == ESP_OK) {
-            metrics->jetson_power_mw = power_mw;
-            success = true;
-            ESP_LOGI(TAG, "Jetson功率: %.1f mW (%.2f W)", power_mw, power_mw/1000.0f);
+            if (power_mw >= 0 && power_mw < 1000000) {  // 功率合理范围：0到1000W
+                metrics->jetson_power_mw = power_mw;
+                success = true;
+                ESP_LOGI(TAG, "Jetson功率: %.1f mW (%.2f W)", power_mw, power_mw/1000.0f);
+            } else {
+                ESP_LOGW(TAG, "Jetson功率值不合理: %.1f mW (合理范围: 0到1000000mW)", power_mw);
+            }
         }
     }
     
     // 4. 查询内存使用情况
     ESP_LOGI(TAG, "查询Jetson内存使用情况...");
     float memory_total = -1, memory_used = -1;
-    
-    // 获取总内存
+      // 获取总内存
     ret = query_prometheus_api(BOARD_PROMETHEUS_API, JETSON_MEMORY_TOTAL_QUERY, 
                              s_controller.jetson_response_buffer, 
                              s_controller.buffer_size);
     if (ret == ESP_OK) {
-        parse_prometheus_query_response(s_controller.jetson_response_buffer, &memory_total);
+        if (parse_prometheus_query_response(s_controller.jetson_response_buffer, &memory_total) == ESP_OK) {
+            if (memory_total > 0 && memory_total < 1000000000) {  // 内存合理范围：0到1TB(kB)
+                ESP_LOGI(TAG, "Jetson总内存: %.1f kB (%.1f GB)", memory_total, memory_total/1024.0f/1024.0f);
+            } else {
+                ESP_LOGW(TAG, "Jetson总内存值不合理: %.1f kB", memory_total);
+                memory_total = -1;  // 标记为无效
+            }
+        }
     }
     
     // 获取已用内存
@@ -952,7 +839,14 @@ static esp_err_t fetch_jetson_metrics(system_metrics_t* metrics) {
                              s_controller.jetson_response_buffer, 
                              s_controller.buffer_size);
     if (ret == ESP_OK) {
-        parse_prometheus_query_response(s_controller.jetson_response_buffer, &memory_used);
+        if (parse_prometheus_query_response(s_controller.jetson_response_buffer, &memory_used) == ESP_OK) {
+            if (memory_used >= 0 && memory_used < 1000000000) {  // 内存合理范围
+                ESP_LOGI(TAG, "Jetson已用内存: %.1f kB (%.1f GB)", memory_used, memory_used/1024.0f/1024.0f);
+            } else {
+                ESP_LOGW(TAG, "Jetson已用内存值不合理: %.1f kB", memory_used);
+                memory_used = -1;  // 标记为无效
+            }
+        }
     }
     
     if (memory_total > 0 && memory_used >= 0) {
@@ -1135,13 +1029,18 @@ static esp_err_t parse_prometheus_query_response(const char* response, float* va
         cJSON_Delete(json);
         return ESP_FAIL;
     }
-    
-    // 转换温度值
+      // 转换温度值
     char *endptr;
     float parsed_value = strtof(temp_value->valuestring, &endptr);
+      if (endptr == temp_value->valuestring) {
+        ESP_LOGE(TAG, "数值解析失败: %s", temp_value->valuestring);
+        cJSON_Delete(json);
+        return ESP_FAIL;
+    }
     
-    if (endptr == temp_value->valuestring) {
-        ESP_LOGE(TAG, "温度值解析失败: %s", temp_value->valuestring);
+    // 检查是否是有效的数值（不是NaN或无穷大）
+    if (!isfinite(parsed_value)) {
+        ESP_LOGW(TAG, "解析出的数值无效: %.2f (原始字符串: %s)", parsed_value, temp_value->valuestring);
         cJSON_Delete(json);
         return ESP_FAIL;
     }
@@ -1149,7 +1048,7 @@ static esp_err_t parse_prometheus_query_response(const char* response, float* va
     *value = parsed_value;
     
     if (s_controller.config.debug_mode) {
-        ESP_LOGI(TAG, "JSON解析成功，温度值: %.2f°C", parsed_value);
+        ESP_LOGI(TAG, "JSON解析成功，数值: %.2f (原始字符串: %s)", parsed_value, temp_value->valuestring);
         
         // 打印metric信息
         cJSON *metric = cJSON_GetObjectItem(first_result, "metric");
@@ -1161,13 +1060,7 @@ static esp_err_t parse_prometheus_query_response(const char* response, float* va
             }
         }
     }
-    
-    cJSON_Delete(json);
-    return ESP_OK;
-}
-
-static esp_err_t http_event_handler(esp_http_client_event_t *evt) {
-    // 简单的HTTP事件处理器，可以根据需要扩展
+      cJSON_Delete(json);
     return ESP_OK;
 }
 
@@ -1244,131 +1137,3 @@ void bsp_board_ws2812_display_test_network_connectivity(void) {
 }
 
 // ========== 缺失的函数实现 ==========
-
-static esp_err_t parse_jetson_metrics(const char* data, system_metrics_t* metrics) {
-    bool success = false;
-    
-    // 解析Jetson CPU温度
-    float cpu_temp = extract_metric_value(data, "temperature_C{statistic=\"cpu\"}");
-    if (cpu_temp >= 0) {
-        metrics->jetson_cpu_temp = cpu_temp;
-        success = true;
-    }
-    
-    // 解析Jetson GPU温度
-    float gpu_temp = extract_metric_value(data, "temperature_C{statistic=\"gpu\"}");
-    if (gpu_temp >= 0 && gpu_temp != -256.0f) {  // -256.0表示传感器无效
-        metrics->jetson_gpu_temp = gpu_temp;
-        success = true;
-    }
-    
-    // 解析GPU使用率 - 优化算法
-    // 方法1: 直接从GPU频率计算使用率
-    float gpu_freq = extract_metric_value(data, "gpu_utilization_percentage_Hz{nvidia_gpu=\"freq\",statistic=\"gpu\"}");
-    float gpu_max_freq = extract_metric_value(data, "gpu_utilization_percentage_Hz{nvidia_gpu=\"max_freq\",statistic=\"gpu\"}");
-      // GPU频率使用率计算已弃用，现在使用功率监控替代
-    // if (gpu_freq >= 0 && gpu_max_freq > 0) {
-    //     float freq_usage = (gpu_freq / gpu_max_freq) * 100.0f;
-    //     metrics->jetson_gpu_usage = freq_usage;
-    //     success = true;
-    //     if (s_controller.config.debug_mode) {
-    //         ESP_LOGI(TAG, "GPU频率使用率: %.1f%% (%.0f/%.0f MHz)", 
-    //                  freq_usage, gpu_freq/1000000, gpu_max_freq/1000000);
-    //     }
-    // } else {
-    //     // 方法2: 尝试从GPU内存使用率估算
-    //     float gpu_mem_used = extract_metric_value(data, "gpuram_kB{nvidia_gpu=\"mem\",statistic=\"gpu\"}");
-    //     if (gpu_mem_used >= 0) {
-    //         // 如果GPU内存有使用，假设有一定的GPU活动
-    //         metrics->jetson_gpu_usage = gpu_mem_used > 0 ? 20.0f : 0.0f;  // 简单估算
-    //         success = true;
-    //     }
-    // }
-    
-    // 解析内存使用情况 (单位: kB) - 使用更准确的计算
-    float memory_total = extract_metric_value(data, "ram_kB{statistic=\"total\"}");
-    float memory_used = extract_metric_value(data, "ram_kB{statistic=\"used\"}");
-    float memory_buffers = extract_metric_value(data, "ram_kB{statistic=\"buffers\"}");
-    float memory_cached = extract_metric_value(data, "ram_kB{statistic=\"cached\"}");
-    
-    if (memory_total > 0 && memory_used >= 0) {
-        metrics->jetson_memory_total = memory_total / 1024.0f; // 转换为MB
-        
-        // 计算实际使用的内存 (排除buffers和cached)
-        float actual_used = memory_used;
-        if (memory_buffers >= 0) actual_used -= memory_buffers;
-        if (memory_cached >= 0) actual_used -= memory_cached;
-        
-        // 确保不会出现负值
-        if (actual_used < 0) actual_used = memory_used;
-        
-        metrics->jetson_memory_used = actual_used / 1024.0f;   // 转换为MB
-        metrics->jetson_memory_usage = (actual_used / memory_total) * 100.0f;
-        success = true;
-        
-        if (s_controller.config.debug_mode) {
-            ESP_LOGI(TAG, "内存使用情况: %.1f%% (%.1fMB/%.1fMB, 实际使用:%.1fMB)", 
-                     metrics->jetson_memory_usage, 
-                     metrics->jetson_memory_used, metrics->jetson_memory_total,
-                     actual_used / 1024.0f);
-        }
-    }
-    
-    return success ? ESP_OK : ESP_FAIL;
-}
-
-static float extract_metric_value(const char* data, const char* metric_name) {
-    char* line_start = strstr(data, metric_name);
-    if (line_start == NULL) {
-        if (s_controller.config.debug_mode) {
-            ESP_LOGW(TAG, "未找到指标: %s", metric_name);
-        }
-        return -1.0f;
-    }
-    
-    // 找到值的开始位置 (跳过指标名和空格)
-    char* value_start = strchr(line_start, ' ');
-    if (value_start == NULL) {
-        // 尝试查找制表符
-        value_start = strchr(line_start, '\t');
-        if (value_start == NULL) {
-            if (s_controller.config.debug_mode) {
-                ESP_LOGW(TAG, "指标格式错误: %s", metric_name);
-            }
-            return -1.0f;
-        }
-    }
-    
-    // 跳过空格和制表符
-    while (*value_start == ' ' || *value_start == '\t') {
-        value_start++;
-    }
-    
-    // 检查行尾，确保不跨行解析
-    char* line_end = strchr(value_start, '\n');
-    if (line_end) {
-        *line_end = '\0';  // 临时截断以确保安全解析
-    }
-    
-    // 解析浮点数值
-    char* endptr;
-    float value = strtof(value_start, &endptr);
-    
-    // 恢复换行符
-    if (line_end) {
-        *line_end = '\n';
-    }
-    
-    if (endptr == value_start) {
-        if (s_controller.config.debug_mode) {
-            ESP_LOGW(TAG, "数值解析失败: %s", metric_name);
-        }
-        return -1.0f;  // 解析失败
-    }
-    
-    if (s_controller.config.debug_mode) {
-        ESP_LOGI(TAG, "解析成功 %s = %.2f", metric_name, value);
-    }
-    
-    return value;
-}

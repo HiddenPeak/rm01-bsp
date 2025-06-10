@@ -33,8 +33,8 @@ static const char *TAG = "BSP";
 #define BSP_POWER_STATUS_REPORT_INTERVAL    30      // 电源状态报告间隔（30秒）
 #define BSP_NETWORK_STATUS_REPORT_INTERVAL 60    // 网络状态报告间隔（60秒）
 
-// 动画更新任务句柄
-static TaskHandle_t animation_task_handle = NULL;
+// 动画更新任务句柄 - 已移除，由LED Matrix Logo Display Controller管理
+// static TaskHandle_t animation_task_handle = NULL; // 功能已迁移
 
 // BSP性能统计结构
 typedef struct {
@@ -54,19 +54,8 @@ static bsp_performance_stats_t bsp_stats = {0};
 // 前向声明
 static esp_err_t bsp_board_validate_config(void);
 
-// 动画更新任务
-static void animation_update_task(void *pvParameters) {
-    ESP_LOGI(TAG, "LED矩阵动画更新任务启动");
-    
-    while (1) {
-        led_matrix_update_animation();
-        
-        // 更新动画帧统计
-        bsp_board_increment_animation_frames();
-        
-        vTaskDelay(BSP_ANIMATION_UPDATE_RATE_MS / portTICK_PERIOD_MS);
-    }
-}
+// 动画更新任务 - 已移除，由LED Matrix Logo Display Controller管理
+// static void animation_update_task(void *pvParameters) - 功能已迁移到新的Logo Display Controller
 
 // BSP LED矩阵服务初始化
 void bsp_init_led_matrix_service(void) {
@@ -111,38 +100,13 @@ esp_err_t bsp_init_webserver_service(void) {
     }
 }
 
-// 启动动画更新任务
-esp_err_t bsp_start_animation_task(void) {
-    if (animation_task_handle != NULL) {
-        ESP_LOGW(TAG, "LED矩阵动画更新任务已在运行");
-        return ESP_OK;
-    }
-      BaseType_t ret = xTaskCreate(
-        animation_update_task,
-        "animation_task",
-        CONFIG_BSP_ANIMATION_TASK_STACK_SIZE,
-        NULL,
-        CONFIG_BSP_ANIMATION_TASK_PRIORITY,
-        &animation_task_handle
-    );
-    
-    if (ret == pdPASS) {
-        ESP_LOGI(TAG, "LED矩阵自动动画更新任务已启动");
-        return ESP_OK;
-    } else {
-        ESP_LOGE(TAG, "LED矩阵动画更新任务创建失败");
-        animation_task_handle = NULL;
-        return ESP_FAIL;
-    }
-}
+// 启动动画更新任务 - 已移除，由LED Matrix Logo Display Controller管理
+// 旧的动画任务已被新的Logo Display Controller取代
 
-// 停止动画更新任务
+// 停止动画更新任务 - 已移除，由LED Matrix Logo Display Controller管理
 void bsp_stop_animation_task(void) {
-    if (animation_task_handle != NULL) {
-        vTaskDelete(animation_task_handle);
-        animation_task_handle = NULL;
-        ESP_LOGI(TAG, "LED矩阵动画更新任务已停止");
-    }
+    ESP_LOGI(TAG, "动画任务已由LED Matrix Logo Display Controller管理，无需单独停止");
+    // 可以调用 led_matrix_logo_display_stop() 来停止Logo显示
 }
 
 esp_err_t bsp_w5500_init(spi_host_device_t host) {
@@ -206,21 +170,24 @@ esp_err_t bsp_board_init(void) {
         return ret;
     }
     
-    ESP_LOGI(TAG, "Touch WS2812上电指示灯已启动（白色常亮表示系统正常上电）");
-    
-    // ============ 第二阶段：LED矩阵和基础硬件初始化 ============
+    ESP_LOGI(TAG, "Touch WS2812上电指示灯已启动（白色常亮表示系统正常上电）");    // ============ 第二阶段：LED矩阵和基础硬件初始化 ============
     ESP_LOGI(TAG, "第二阶段：LED矩阵和基础硬件初始化");
     
-    // 初始化LED矩阵服务，提供系统状态指示
-    ESP_LOGI(TAG, "初始化LED矩阵服务");
-    bsp_init_led_matrix_service();
-    
-    // 启用LED矩阵动画任务
-    ret = bsp_start_animation_task();
+    // 直接初始化LED Matrix Logo Display Controller（内部会处理基础硬件初始化）
+    ESP_LOGI(TAG, "初始化LED Matrix Logo Display Controller");
+    ret = led_matrix_logo_display_init(NULL);
     if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "LED矩阵动画任务启动失败，但继续初始化");
+        ESP_LOGW(TAG, "LED Matrix Logo Display Controller初始化失败，但继续初始化: %s", esp_err_to_name(ret));
     } else {
-        ESP_LOGI(TAG, "LED矩阵动画任务已启动，可提供早期状态指示");
+        ESP_LOGI(TAG, "LED Matrix Logo Display Controller初始化成功");
+        
+        // 启动Logo显示服务
+        ret = led_matrix_logo_display_start();
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "LED Matrix Logo Display服务启动失败: %s", esp_err_to_name(ret));
+        } else {
+            ESP_LOGI(TAG, "LED Matrix Logo Display服务已启动，开始显示Logo");
+        }
     }
 
     // 初始化电源管理模块
@@ -303,13 +270,13 @@ esp_err_t bsp_board_init(void) {
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "网络适配器初始化失败: %s", esp_err_to_name(ret));
         return ret;
-    }
-      // 设置启动状态指示（使用LED动画接口）
-    esp_err_t led_ret = led_animation_select(1); // 选择启动动画（索引1）
+    }      
+    // 设置启动状态指示（使用LED Matrix Logo Display Controller）
+    esp_err_t led_ret = led_matrix_logo_display_set_mode(LOGO_DISPLAY_MODE_SINGLE);
     if (led_ret == ESP_OK) {
-        ESP_LOGI(TAG, "已设置启动状态指示动画");
+        ESP_LOGI(TAG, "已设置LED Matrix为单一Logo显示模式");
     } else {
-        ESP_LOGW(TAG, "设置启动状态指示动画失败: %s", esp_err_to_name(led_ret));
+        ESP_LOGW(TAG, "设置LED Matrix Logo显示模式失败: %s", esp_err_to_name(led_ret));
     }
     
     // 启动BSP电源芯片UART通信测试
@@ -449,18 +416,18 @@ esp_err_t bsp_board_cleanup(void) {
 
 // 获取BSP初始化状态
 bool bsp_board_is_initialized(void) {
-    // 检查关键组件是否已初始化
-    return (animation_task_handle != NULL);
+    // 检查LED Matrix Logo Display Controller是否已初始化
+    return led_matrix_logo_display_is_initialized();
 }
 
 // BSP错误恢复函数
 esp_err_t bsp_board_error_recovery(void) {
     ESP_LOGW(TAG, "开始BSP错误恢复");
     
-    // 重启关键服务
-    esp_err_t ret = bsp_start_animation_task();
+    // 重启LED Matrix Logo Display Controller
+    esp_err_t ret = led_matrix_logo_display_start();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "动画任务恢复失败");
+        ESP_LOGE(TAG, "LED Matrix Logo Display Controller恢复失败");
         return ret;
     }
     
@@ -474,15 +441,9 @@ esp_err_t bsp_board_error_recovery(void) {
 // BSP系统诊断函数
 void bsp_board_print_system_info(void) {
     ESP_LOGI(TAG, "=== BSP系统信息 ===");
-    ESP_LOGI(TAG, "动画任务状态: %s", animation_task_handle ? "运行中" : "已停止");
-      // 显示内存使用情况
+    ESP_LOGI(TAG, "LED Matrix Logo Display状态: %s", led_matrix_logo_display_is_running() ? "运行中" : "已停止");    // 显示内存使用情况
     ESP_LOGI(TAG, "自由堆内存: %" PRIu32 " 字节", (uint32_t)esp_get_free_heap_size());
     ESP_LOGI(TAG, "最小自由堆内存: %" PRIu32 " 字节", (uint32_t)esp_get_minimum_free_heap_size());
-      // 显示任务运行时间
-    if (animation_task_handle) {
-        UBaseType_t stack_remaining = uxTaskGetStackHighWaterMark(animation_task_handle);
-        ESP_LOGI(TAG, "动画任务栈高水位: %" PRIu32 " 字节", (uint32_t)(stack_remaining * sizeof(StackType_t)));
-    }
     
     // 显示电源状态
     float main_v = bsp_get_main_voltage();
@@ -496,10 +457,12 @@ void bsp_board_print_system_info(void) {
 esp_err_t bsp_board_health_check(void) {
     ESP_LOGI(TAG, "开始BSP健康检查");
     
-    // 检查动画任务状态
-    if (animation_task_handle == NULL) {
-        ESP_LOGW(TAG, "健康检查: 动画任务未运行");
-        return ESP_FAIL;
+    esp_err_t ret = ESP_OK;
+    
+    // 检查LED Matrix Logo Display Controller状态
+    if (!led_matrix_logo_display_is_running()) {
+        ESP_LOGW(TAG, "健康检查: LED Matrix Logo Display Controller未运行");
+        ret = ESP_FAIL;
     }
       // 检查内存使用情况
     size_t free_heap = esp_get_free_heap_size();
@@ -512,9 +475,8 @@ esp_err_t bsp_board_health_check(void) {
     if (main_v < CONFIG_BSP_HEALTH_CHECK_MIN_VOLTAGE || main_v > CONFIG_BSP_HEALTH_CHECK_MAX_VOLTAGE) {
         ESP_LOGW(TAG, "健康检查: 主电源电压异常 (%.2fV)", main_v);
     }
-    
-    ESP_LOGI(TAG, "BSP健康检查完成");
-    return ESP_OK;
+      ESP_LOGI(TAG, "BSP健康检查完成");
+    return ret;
 }
 
 // BSP性能统计函数
@@ -527,9 +489,8 @@ void bsp_board_update_performance_stats(void) {
     if (min_heap < bsp_stats.heap_usage_peak || bsp_stats.heap_usage_peak == 0) {
         bsp_stats.heap_usage_peak = min_heap;
     }
-    
-    // 检查关键任务状态
-    bsp_stats.critical_task_running = (animation_task_handle != NULL);
+      // 检查关键任务状态（LED Matrix Logo Display Controller）
+    bsp_stats.critical_task_running = led_matrix_logo_display_is_running();
     
     // 更新任务切换计数（近似值）
     bsp_stats.task_switches = xTaskGetTickCount();
@@ -714,26 +675,14 @@ esp_err_t bsp_board_health_check_extended(void) {
     ESP_LOGI(TAG, "开始扩展BSP健康检查");
     
     esp_err_t ret = ESP_OK;
-    
-    // 基础健康检查
+      // 基础健康检查
     if (bsp_board_health_check() != ESP_OK) {
         ret = ESP_FAIL;
     }
-      // 检查任务堆栈使用情况
-    if (animation_task_handle != NULL) {
-        UBaseType_t stack_remaining = uxTaskGetStackHighWaterMark(animation_task_handle);
-        if (stack_remaining < CONFIG_BSP_HEALTH_CHECK_MIN_STACK_REMAINING) {
-            ESP_LOGW(TAG, "健康检查: 动画任务堆栈空间不足 (%d 字节剩余)", stack_remaining * sizeof(StackType_t));
-            ret = ESP_FAIL;
-        }
-    }
-      // 检查系统负载
-    if (animation_task_handle != NULL) {
-        eTaskState task_state = eTaskGetState(animation_task_handle);
-        if (task_state == eSuspended) {
-            ESP_LOGW(TAG, "健康检查: 动画任务处于挂起状态");
-            ret = ESP_FAIL;
-        }
+      // 检查LED Matrix Logo Display Controller运行状态
+    if (!led_matrix_logo_display_is_running()) {
+        ESP_LOGW(TAG, "健康检查: LED Matrix Logo Display Controller未运行");
+        ret = ESP_FAIL;
     }
     
     // 检查网络连接状态

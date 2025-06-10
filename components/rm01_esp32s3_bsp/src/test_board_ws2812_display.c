@@ -242,11 +242,10 @@ void test_board_ws2812_display_main(void) {
  */
 void demo_board_ws2812_auto_mode(void) {
     ESP_LOGI(TAG, "========== Board WS2812自动模式演示 ==========");
-    
-    ESP_LOGI(TAG, "在自动模式下，Board WS2812会根据以下规则显示:");
-    ESP_LOGI(TAG, "  高温警告（N305/Jetson >= 85°C）: 红色慢速呼吸 (高优先级)");
-    ESP_LOGI(TAG, "  GPU高使用率（>= 80%%）: 紫色快速呼吸 (中优先级)");
-    ESP_LOGI(TAG, "  内存高使用率（>= 90%%）: 紫色慢速呼吸 (低优先级)");    ESP_LOGI(TAG, "  正常状态: 关闭显示");
+      ESP_LOGI(TAG, "在自动模式下，Board WS2812会根据以下规则显示:");
+    ESP_LOGI(TAG, "  高温警告（N305 >= 95°C 或 Jetson >= 80°C）: 红色慢速呼吸 (高优先级)");
+    ESP_LOGI(TAG, "  功率过高（Jetson >= 45W）: 紫色快速呼吸 (中优先级)");
+    ESP_LOGI(TAG, "  内存高使用率（>= 90%%）: 白色慢速呼吸 (低优先级)");ESP_LOGI(TAG, "  正常状态: 关闭显示");
     ESP_LOGI(TAG, "");
     ESP_LOGI(TAG, "监控数据来源:");
     ESP_LOGI(TAG, "  统一API: %s", BOARD_PROMETHEUS_API);

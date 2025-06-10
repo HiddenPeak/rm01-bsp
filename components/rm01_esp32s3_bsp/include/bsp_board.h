@@ -16,6 +16,7 @@
 #include "bsp_state_manager.h" // 引入状态管理器头文件
 #include "bsp_display_controller.h" // 引入显示控制器头文件
 #include "led_matrix.h" // 引入LED矩阵头文件
+#include "led_matrix_logo_display.h" // 引入LED Matrix Logo Display Controller头文件
 #include "esp_log.h" // 引入日志系统头文件
 #include "esp_err.h" // 引入ESP错误类型头文件
 #include "freertos/FreeRTOS.h" // 引入FreeRTOS头文件
@@ -94,9 +95,9 @@ void bsp_init_led_matrix_service(void);
 esp_err_t bsp_init_network_monitoring_service(void);
 esp_err_t bsp_init_webserver_service(void);
 
-// BSP服务控制
-esp_err_t bsp_start_animation_task(void);
-void bsp_stop_animation_task(void);
+// BSP服务控制 - LED Matrix Logo Display Controller管理
+// esp_err_t bsp_start_animation_task(void); // 已移除，由LED Matrix Logo Display Controller管理
+void bsp_stop_animation_task(void); // 保留但功能已迁移
 
 // 网络监控功能已迁移到 network_monitor 模块，请直接使用该模块的接口
 

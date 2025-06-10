@@ -6,6 +6,7 @@ idf_component_register(
         "src/led_animation_demo.c"
         "src/led_animation_export.c"
         "src/led_animation_loader.c"
+        "src/led_matrix_logo_display.c"
     INCLUDE_DIRS 
         "include"
     REQUIRES 
