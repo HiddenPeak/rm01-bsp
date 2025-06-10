@@ -46,6 +46,8 @@ typedef enum {
     SYSTEM_STATE_HIGH_TEMP_2,           // 高温状态2（>95°C）
     SYSTEM_STATE_USER_HOST_DISCONNECTED, // 用户主机未连接
     SYSTEM_STATE_HIGH_COMPUTE_LOAD,     // 高负荷计算状态
+    SYSTEM_STATE_GPU_HIGH_USAGE,        // GPU高使用率状态
+    SYSTEM_STATE_MEMORY_HIGH_USAGE,     // 内存高使用率状态
     SYSTEM_STATE_COUNT                  // 状态总数
 } system_state_t;
 

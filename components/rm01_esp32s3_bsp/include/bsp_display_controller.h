@@ -187,6 +187,61 @@ void bsp_display_controller_resume_touch_ws2812_auto(void);
  */
 void bsp_display_controller_set_touch_ws2812_brightness(uint8_t brightness);
 
+// ========== Board WS2812 显示接口 ==========
+
+/**
+ * @brief 获取Board WS2812显示状态
+ * 
+ * @param status Board WS2812显示状态结构指针
+ * @return esp_err_t ESP_OK成功，其他值表示失败
+ */
+esp_err_t bsp_display_controller_get_board_ws2812_status(void* status);
+
+/**
+ * @brief 手动设置Board WS2812显示模式
+ * 
+ * @param mode 显示模式
+ * @return esp_err_t ESP_OK成功，其他值表示失败
+ */
+esp_err_t bsp_display_controller_set_board_ws2812_mode(int mode);
+
+/**
+ * @brief 设置Board WS2812颜色
+ * 
+ * @param r 红色值 (0-255)
+ * @param g 绿色值 (0-255)
+ * @param b 蓝色值 (0-255)
+ * @return esp_err_t ESP_OK成功，其他值表示失败
+ */
+esp_err_t bsp_display_controller_set_board_ws2812_color(uint8_t r, uint8_t g, uint8_t b);
+
+/**
+ * @brief 恢复Board WS2812自动模式
+ */
+void bsp_display_controller_resume_board_ws2812_auto(void);
+
+/**
+ * @brief 设置Board WS2812亮度
+ * 
+ * @param brightness 亮度 (0-255)
+ */
+void bsp_display_controller_set_board_ws2812_brightness(uint8_t brightness);
+
+/**
+ * @brief 获取Board WS2812系统监控数据
+ * 
+ * @param metrics 监控数据结构指针
+ * @return esp_err_t ESP_OK成功，其他值表示失败
+ */
+esp_err_t bsp_display_controller_get_board_ws2812_metrics(void* metrics);
+
+/**
+ * @brief 手动更新Board WS2812监控数据
+ * 
+ * @return esp_err_t ESP_OK成功，其他值表示失败
+ */
+esp_err_t bsp_display_controller_update_board_ws2812_metrics(void);
+
 #ifdef __cplusplus
 }
 #endif

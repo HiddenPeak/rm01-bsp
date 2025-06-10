@@ -9,6 +9,7 @@
 #include "bsp_display_controller.h"
 #include "led_animation.h"
 #include "bsp_touch_ws2812_display.h"  // 添加Touch WS2812显示支持
+#include "bsp_board_ws2812_display.h"  // 添加Board WS2812显示支持
 #include "esp_log.h"
 #include "esp_err.h"
 #include "freertos/FreeRTOS.h"
@@ -84,8 +85,7 @@ esp_err_t bsp_display_controller_init(const display_controller_config_t* config)
     
     // 初始化默认状态到动画映射
     initialize_default_mappings();
-    
-    // 初始化Touch WS2812显示控制器
+      // 初始化Touch WS2812显示控制器
     ESP_LOGI(TAG, "初始化Touch WS2812显示控制器");
     esp_err_t ret = bsp_touch_ws2812_display_init(NULL);
     if (ret != ESP_OK) {
@@ -93,6 +93,16 @@ esp_err_t bsp_display_controller_init(const display_controller_config_t* config)
         // 不作为致命错误，继续初始化
     } else {
         ESP_LOGI(TAG, "Touch WS2812显示控制器初始化成功");
+    }
+    
+    // 初始化Board WS2812显示控制器
+    ESP_LOGI(TAG, "初始化Board WS2812显示控制器");
+    ret = bsp_board_ws2812_display_init(NULL);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Board WS2812显示控制器初始化失败: %s", esp_err_to_name(ret));
+        // 不作为致命错误，继续初始化
+    } else {
+        ESP_LOGI(TAG, "Board WS2812显示控制器初始化成功");
     }
     
     s_controller.is_initialized = true;
@@ -119,8 +129,7 @@ esp_err_t bsp_display_controller_start(void) {
         ESP_LOGE(TAG, "注册状态变化回调失败: %s", esp_err_to_name(ret));
         return ret;
     }
-    
-    // 启动Touch WS2812显示控制器
+      // 启动Touch WS2812显示控制器
     ESP_LOGI(TAG, "启动Touch WS2812显示控制器");
     ret = bsp_touch_ws2812_display_start();
     if (ret != ESP_OK) {
@@ -128,6 +137,16 @@ esp_err_t bsp_display_controller_start(void) {
         // 不作为致命错误，继续启动
     } else {
         ESP_LOGI(TAG, "Touch WS2812显示控制器启动成功");
+    }
+    
+    // 启动Board WS2812显示控制器
+    ESP_LOGI(TAG, "启动Board WS2812显示控制器");
+    ret = bsp_board_ws2812_display_start();
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Board WS2812显示控制器启动失败: %s", esp_err_to_name(ret));
+        // 不作为致命错误，继续启动
+    } else {
+        ESP_LOGI(TAG, "Board WS2812显示控制器启动成功");
     }
     
     // 根据当前系统状态设置初始显示
@@ -159,10 +178,13 @@ void bsp_display_controller_stop(void) {
     }
     
     ESP_LOGI(TAG, "停止BSP显示控制器");
-    
-    // 停止Touch WS2812显示控制器
+      // 停止Touch WS2812显示控制器
     ESP_LOGI(TAG, "停止Touch WS2812显示控制器");
     bsp_touch_ws2812_display_stop();
+    
+    // 停止Board WS2812显示控制器
+    ESP_LOGI(TAG, "停止Board WS2812显示控制器");
+    bsp_board_ws2812_display_stop();
     
     // 注销状态变化回调
     bsp_state_manager_unregister_callback(state_change_callback);
@@ -348,6 +370,48 @@ void bsp_display_controller_resume_touch_ws2812_auto(void) {
 
 void bsp_display_controller_set_touch_ws2812_brightness(uint8_t brightness) {
     bsp_touch_ws2812_display_set_brightness(brightness);
+}
+
+// ========== Board WS2812 显示接口实现 ==========
+
+esp_err_t bsp_display_controller_get_board_ws2812_status(void* status) {
+    if (status == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    return bsp_board_ws2812_display_get_status((board_display_status_t*)status);
+}
+
+esp_err_t bsp_display_controller_set_board_ws2812_mode(int mode) {
+    if (mode < 0 || mode >= BOARD_DISPLAY_MODE_COUNT) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    return bsp_board_ws2812_display_set_mode((board_display_mode_t)mode);
+}
+
+esp_err_t bsp_display_controller_set_board_ws2812_color(uint8_t r, uint8_t g, uint8_t b) {
+    return bsp_board_ws2812_display_set_color(r, g, b);
+}
+
+void bsp_display_controller_resume_board_ws2812_auto(void) {
+    bsp_board_ws2812_display_resume_auto();
+}
+
+void bsp_display_controller_set_board_ws2812_brightness(uint8_t brightness) {
+    bsp_board_ws2812_display_set_brightness(brightness);
+}
+
+esp_err_t bsp_display_controller_get_board_ws2812_metrics(void* metrics) {
+    if (metrics == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    return bsp_board_ws2812_display_get_metrics((system_metrics_t*)metrics);
+}
+
+esp_err_t bsp_display_controller_update_board_ws2812_metrics(void) {
+    return bsp_board_ws2812_display_update_metrics();
 }
 
 // ========== 静态函数实现 ==========
