@@ -103,11 +103,7 @@ static const char* MODE_NAMES[] = {
 };
 
 // ========== 网络IP地址定义 ==========
-// 注意：NM_INTERNET_IP 已在 network_monitor.h 中定义
-
-#define NM_COMPUTING_MODULE_IP   "10.10.99.99"   // N305应用模组 (修正IP地址)
-#define NM_APPLICATION_MODULE_IP "10.10.99.98"   // Jetson算力模组 (修正IP地址)
-#define NM_USER_HOST_IP          "10.10.99.100"  // 用户主机
+// 注意：所有网络IP定义已在 network_monitor.h 中统一定义，此处不再重复定义
 
 // ========== 静态函数声明 ==========
 

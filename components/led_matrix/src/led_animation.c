@@ -53,7 +53,7 @@ static animation_data_t* get_current_animation(void) {
 }
 
 // 获取当前动画的掩码
-static uint8_t (*get_current_mask(void))[LED_MATRIX_WIDTH] {
+__attribute__((unused)) static uint8_t (*get_current_mask(void))[LED_MATRIX_WIDTH] {
     animation_data_t* current = get_current_animation();
     if (current == NULL) {
         return NULL;
@@ -62,7 +62,7 @@ static uint8_t (*get_current_mask(void))[LED_MATRIX_WIDTH] {
 }
 
 // 获取当前动画的颜色数组
-static uint8_t (*get_current_colors(void))[LED_MATRIX_WIDTH][3] {
+__attribute__((unused)) static uint8_t (*get_current_colors(void))[LED_MATRIX_WIDTH][3] {
     animation_data_t* current = get_current_animation();
     if (current == NULL) {
         return NULL;

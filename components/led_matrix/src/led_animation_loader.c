@@ -370,7 +370,6 @@ esp_err_t load_specific_animation_from_json(const char *filename, const char *an
     }
     
     int animations_count = cJSON_GetArraySize(animations);
-    bool found = false;
     
     // 搜索指定名称的动画
     for (int i = 0; i < animations_count; i++) {
